@@ -151,6 +151,68 @@ async def update_or_create_item(item_name: str, payload: dict, uid: str = Depend
     return {"id": doc_id, "message": "Item updated/created"}
 
 
+@app.get("/items/{item_id}/edit", response_class=HTMLResponse)
+async def edit_item_form(request: Request, item_id: str):
+    """
+    Display the edit form for an item
+    """
+    # Get session cookie manually for HTML pages
+    session = request.cookies.get("session")
+
+    if not session:
+        return RedirectResponse(url="/login")
+
+    try:
+        decoded_token = auth.verify_id_token(session)
+        uid = decoded_token["uid"]
+    except Exception as e:
+        logger.warning(f"Session verification failed: {e}")
+        return RedirectResponse(url="/login")
+
+    # Fetch the specific item
+    doc_ref = db.collection("user_data").document(uid).collection("items").document(item_id)
+    doc = doc_ref.get()
+
+    if not doc.exists:
+        raise HTTPException(status_code=404, detail="Item not found")
+
+    item = doc.to_dict() | {"id": doc.id}
+
+    return templates.TemplateResponse("edit_item.html", {
+        "request": request,
+        "item": item,
+        "user": {"email": decoded_token.get("email", "Unknown User")}
+    })
+
+
+@app.post("/items/{item_id}/edit")
+async def update_item(request: Request, item_id: str, uid: str = Depends(get_tenant_id)):
+    """
+    Updates an existing item by ID
+    """
+    form_data = await request.form()
+    item_name = form_data.get("name")
+
+    if not item_name:
+        raise HTTPException(status_code=400, detail="Item name is required")
+
+    # Update the document by ID
+    doc_ref = db.collection("user_data").document(uid).collection("items").document(item_id)
+
+    # Verify item exists and belongs to user
+    doc = doc_ref.get()
+    if not doc.exists:
+        raise HTTPException(status_code=404, detail="Item not found")
+
+    doc_ref.update({
+        "item_name": item_name,
+        "updated_at": firestore.SERVER_TIMESTAMP
+    })
+
+    logger.info(f"Updated item {item_id} for user {uid}")
+    return RedirectResponse(url="/dashboard", status_code=303)
+
+
 @app.post("/items/{item_id}/delete")
 async def delete_item(item_id: str, uid: str = Depends(get_tenant_id)):
     """
