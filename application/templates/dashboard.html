@@ -1,0 +1,45 @@
+{% extends "base.html" %}
+
+{% block title %}Dashboard{% endblock %}
+
+{% block content %}
+<div class="card mb-4">
+    <h2>My Items</h2>
+    <p class="mb-4 text-secondary">Logged in as: {{ user.email }}</p>
+
+    <form action="/items/create" method="put" class="flex-col">
+        <div class="form-group">
+            <label for="name">New Item Name</label>
+            <input type="text" name="name" id="name" placeholder="Enter item name..." required>
+        </div>
+        <div>
+            <button type="submit" class="btn" style="padding: 0.5rem 1rem; font-size: 0.8rem; width: auto;">Add
+                Item</button>
+        </div>
+    </form>
+</div>
+
+<div class="card">
+    <h2>Item List</h2>
+    {% if items %}
+    <ul class="item-list">
+        {% for item in items %}
+        <li class="item">
+            <span>{{ item.item_name }}</span>
+            <div style="display: flex; gap: 0.5rem; align-items: center;">
+                <a href="/items/{{ item.id }}/edit" class="btn btn-secondary"
+                    style="padding: 0.5rem 1rem; font-size: 0.8rem; width: auto;">Edit</a>
+                <form action="/items/{{ item.id }}/delete" method="post" style="display:inline;"
+                    onsubmit="return confirm('Are you sure you want to delete this item?');">
+                    <button type="submit" class="btn btn-danger"
+                        style="padding: 0.5rem 1rem; font-size: 0.8rem; width: auto;">Delete</button>
+                </form>
+            </div>
+        </li>
+        {% endfor %}
+    </ul>
+    {% else %}
+    <p class="text-secondary text-center" style="padding: 2rem 0;">No items found. Create one above!</p>
+    {% endif %}
+</div>
+{% endblock %}

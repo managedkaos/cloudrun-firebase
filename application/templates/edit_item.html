@@ -1,0 +1,21 @@
+{% extends "base.html" %}
+
+{% block title %}Edit Item{% endblock %}
+
+{% block content %}
+<div class="card mb-4">
+    <h2>Edit Item</h2>
+
+    <form action="/items/{{ item_id }}/update" method="post" class="flex-col">
+        <div class="form-group">
+            <label for="name">Item Name</label>
+            <input type="text" name="name" id="name" value="{{ item.name }}" required>
+        </div>
+        <div style="display: flex; gap: 1rem;">
+            <button type="submit" class="btn">Save Changes</button>
+            <a href="/dashboard" class="btn btn-secondary text-center"
+                style="display: inline-block; width: 100%; text-decoration: none;">Cancel</a>
+        </div>
+    </form>
+</div>
+{% endblock %}

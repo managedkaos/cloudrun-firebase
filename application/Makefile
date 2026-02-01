@@ -57,6 +57,16 @@ isort:
 #test:
 #	python -m unittest --verbose --failfast
 
+emulators:
+	firebase emulators:start \
+		--only auth,firestore \
+		--import=./emulator_data \
+		--export-on-exit \
+		--debug
+
+local:
+	python -u -m uvicorn main:app --host "0.0.0.0" --port "8080" --reload
+
 build: lint test
 	docker build --tag $(APP):$(TAG) .
 

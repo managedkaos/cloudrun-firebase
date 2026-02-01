@@ -1,6 +1,6 @@
 {
   "hosting": {
-    "public": "frontend",
+    "public": "public",
     "ignore": [
       "firebase.json",
       "**/.*",
@@ -8,11 +8,8 @@
     ],
     "rewrites": [
       {
-        "source": "/api/**",
-        "run": {
-          "serviceId": "cloudrun-firebase-app",
-          "region": "us-central1"
-        }
+        "source": "**",
+        "destination": "/index.html"
       }
     ]
   },
