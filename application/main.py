@@ -1,13 +1,38 @@
+import logging
+import os
+
+os.environ["FIRESTORE_EMULATOR_HOST"] = "localhost:8081"
+os.environ["FIREBASE_AUTH_EMULATOR_HOST"] = "localhost:9099"
+
+
+
 from fastapi import Depends, FastAPI, HTTPException, Security, status
 from fastapi.security import APIKeyHeader, HTTPAuthorizationCredentials, HTTPBearer
 
 # from firebase_admin import auth, credentials, firestore, initialize_app
 from firebase_admin import auth, firestore, initialize_app
 
+# 0. Initialize Logger
+logging.basicConfig(
+    level=logging.DEBUG,
+    format="%(asctime)s %(levelname)s %(name)s %(message)s",
+)
+logger = logging.getLogger(__name__)
+
+
+# Force check for the environment variable
+endpoint = os.getenv("FIRESTORE_EMULATOR_HOST")
+print(f"DEBUG: Connecting to Firestore Emulator at {endpoint}")
+
+
+
 # 1. Initialize Firebase Admin
 # If FIREBASE_AUTH_EMULATOR_HOST is in env, it connects to local emulator automatically
 if not len(initialize_app().name):
     initialize_app()
+    logger.info("Initialized application.")
+else:
+    logger.info("Application already initialized.")
 
 db = firestore.client()
 
@@ -42,22 +67,53 @@ async def get_tenant_id(
 
 
 # 4. CRUD Routes
-@app.post("/items")
-async def create_item(payload: dict, uid: str = Depends(get_tenant_id)):
-    """Creates an item inside the user's specific subcollection."""
-    doc_ref = db.collection("users").document(uid).collection("items").document()
-    doc_ref.set({**payload, "owner_id": uid})
-    return {"id": doc_ref.id, "message": "Item created"}
+@app.put("/items/{item_name}")
+async def update_or_create_item(item_name: str, payload: dict, uid: str = Depends(get_tenant_id)):
+    """
+    Uses item_name as the Document ID to prevent duplicates.
+    """
+    # Sanitize the item_name to ensure it's a valid Firestore ID (no slashes)
+    doc_id = item_name.replace("/", "-")
 
+    doc_ref = db.collection("users").document(uid).collection("items").document(doc_id)
+
+    # .set with merge=True behaves like a traditional PUT/UPSERT
+    doc_ref.set({
+        **payload,
+        "item_name": item_name,
+        "owner_id": uid,
+        "updated_at": firestore.SERVER_TIMESTAMP
+    }, merge=True)
+
+    return {"id": doc_id, "message": "Item updated/created"}
 
 @app.get("/items")
 async def list_items(uid: str = Depends(get_tenant_id)):
     """Lists items only belonging to the authenticated user/API key owner."""
+    logger.info("list_items:start uid=%s", uid)
     items_ref = db.collection("users").document(uid).collection("items")
-    docs = items_ref.stream()
-    return [doc.to_dict() for doc in docs]
+    try:
+        docs = list(items_ref.stream())
+        logger.info("list_items:stream_complete uid=%s count=%s", uid, len(docs))
+        items = [doc.to_dict() for doc in docs]
+        logger.debug("list_items:success uid=%s", uid)
+        return items
+    except Exception:
+        logger.exception("list_items:failed uid=%s", uid)
+        raise
 
 
 @app.get("/health", status_code=status.HTTP_200_OK)
 async def health():
     return {"status": "online"}
+
+@app.get("/debug-db")
+async def debug_db():
+    # Attempt to list all keys in the collection
+    docs = db.collection("api_keys").stream()
+    keys_found = [doc.id for doc in docs]
+    return {
+        "project_id": os.getenv("GOOGLE_CLOUD_PROJECT"),
+        "emulator_host": os.getenv("FIRESTORE_EMULATOR_HOST"),
+        "keys_in_db": keys_found
+    }
