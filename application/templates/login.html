@@ -32,12 +32,21 @@
         getAuth,
         signInWithEmailAndPassword,
         GoogleAuthProvider,
-        signInWithPopup
+        signInWithPopup,
+        connectAuthEmulator
     } from "https://www.gstatic.com/firebasejs/12.8.0/firebase-auth.js";
 
     const firebaseConfig = {{ firebase_config | tojson }};
     const app = initializeApp(firebaseConfig);
     const auth = getAuth(app);
+
+    // Connect to emulator only in local development
+    // In production, window.location.hostname will be your actual domain
+    if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
+        console.log('🔧 Development mode: Connecting to Firebase Auth emulator');
+        connectAuthEmulator(auth, "http://localhost:9099", { disableWarnings: true });
+    }
+
     const provider = new GoogleAuthProvider();
 
     const handleSessionCreation = async (user, btn, originalText) => {
@@ -54,7 +63,8 @@
             if (response.ok) {
                 window.location.href = '/dashboard';
             } else {
-                alert('Failed to create session');
+                const errorData = await response.json();
+                alert('Failed to create session: ' + (errorData.detail || 'Unknown error'));
                 if (btn) {
                     btn.innerText = originalText;
                     btn.disabled = false;

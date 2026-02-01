@@ -7,7 +7,7 @@
     <h2>My Items</h2>
     <p class="mb-4 text-secondary">Logged in as: {{ user.email }}</p>
 
-    <form action="/items/create" method="put" class="flex-col">
+    <form action="/items/create" method="post" class="flex-col">
         <div class="form-group">
             <label for="name">New Item Name</label>
             <input type="text" name="name" id="name" placeholder="Enter item name..." required>
@@ -42,4 +42,6 @@
     <p class="text-secondary text-center" style="padding: 2rem 0;">No items found. Create one above!</p>
     {% endif %}
 </div>
+
+<a href="/logout" class="btn btn-secondary" style="margin-top: 1rem;">Logout</a>
 {% endblock %}
