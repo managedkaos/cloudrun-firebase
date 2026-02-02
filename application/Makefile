@@ -57,6 +57,8 @@ isort:
 test:
 	pytest --verbose
 
+run-all-crud-steps:
+	./utils/run-all-crud-steps.sh
 
 emulators:
 	firebase emulators:start \

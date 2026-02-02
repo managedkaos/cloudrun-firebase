@@ -28,7 +28,7 @@ def test_items_smoke_with_api_key(base_url, http_session, api_key):
 
     try:
         create_response = http_session.post(
-            f"{base_url}/items",
+            f"{base_url}/item",
             headers={"X-API-KEY": api_key},
             json={"item_name": item_name},
             timeout=10,
@@ -47,7 +47,7 @@ def test_items_smoke_with_api_key(base_url, http_session, api_key):
         assert any(item.get("id") == item_id for item in items)
 
         update_response = http_session.put(
-            f"{base_url}/items/{item_id}",
+            f"{base_url}/item/{item_id}",
             headers={"X-API-KEY": api_key},
             json={"tag": "smoke-updated"},
             timeout=10,
@@ -55,8 +55,8 @@ def test_items_smoke_with_api_key(base_url, http_session, api_key):
         assert update_response.status_code == 200
     finally:
         if item_id:
-            http_session.post(
-                f"{base_url}/items/{item_id}/delete",
+            http_session.delete(
+                f"{base_url}/item/{item_id}",
                 headers={"X-API-KEY": api_key},
                 timeout=10,
             )
@@ -83,7 +83,7 @@ def test_token_based_session_flow(base_url, http_session, auth_id_token):
     item_id = None
     try:
         create_response = http_session.post(
-            f"{base_url}/items",
+            f"{base_url}/item",
             headers={"Authorization": f"Bearer {auth_id_token}"},
             json={"item_name": item_name},
             timeout=10,
@@ -93,7 +93,7 @@ def test_token_based_session_flow(base_url, http_session, auth_id_token):
         assert item_id
 
         update_response = http_session.put(
-            f"{base_url}/items/{item_id}",
+            f"{base_url}/item/{item_id}",
             headers={"Authorization": f"Bearer {auth_id_token}"},
             json={"tag": "session-smoke"},
             timeout=10,
@@ -101,8 +101,8 @@ def test_token_based_session_flow(base_url, http_session, auth_id_token):
         assert update_response.status_code == 200
     finally:
         if item_id:
-            http_session.post(
-                f"{base_url}/items/{item_id}/delete",
+            http_session.delete(
+                f"{base_url}/item/{item_id}",
                 headers={"Authorization": f"Bearer {auth_id_token}"},
                 timeout=10,
             )

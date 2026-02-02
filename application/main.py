@@ -107,7 +107,7 @@ async def get_tenant_id_or_redirect(
 
 
 # 4. CRUD Routes
-@app.post("/items/create")
+@app.post("/item/create")
 async def create_item(request: Request, uid: str = Depends(get_tenant_id)):
     """
     Creates a new item with an auto-generated ID
@@ -137,7 +137,7 @@ async def create_item(request: Request, uid: str = Depends(get_tenant_id)):
     return RedirectResponse(url="/dashboard", status_code=303)
 
 
-@app.post("/items")
+@app.post("/item")
 async def create_item_api(request: Request, uid: str = Depends(get_tenant_id)):
     """
     Creates a new item with an auto-generated ID and returns JSON.
@@ -171,7 +171,7 @@ async def create_item_api(request: Request, uid: str = Depends(get_tenant_id)):
     return {"id": doc_ref.id, "message": "Item created"}
 
 
-@app.put("/items/{item_id}")
+@app.put("/item/{item_id}")
 async def update_or_create_item(
     item_id: str, payload: dict, uid: str = Depends(get_tenant_id)
 ):
@@ -201,7 +201,7 @@ async def update_or_create_item(
     return {"id": item_id, "message": "Item updated/created"}
 
 
-@app.get("/items/{item_id}/edit", response_class=HTMLResponse)
+@app.get("/item/{item_id}/edit", response_class=HTMLResponse)
 async def edit_item_form(request: Request, item_id: str):
     """
     Display the edit form for an item
@@ -235,7 +235,7 @@ async def edit_item_form(request: Request, item_id: str):
     })
 
 
-@app.post("/items/{item_id}/edit")
+@app.post("/item/{item_id}/edit")
 async def update_item(request: Request, item_id: str, uid: str = Depends(get_tenant_id)):
     """
     Updates an existing item by ID
@@ -271,7 +271,7 @@ async def update_item(request: Request, item_id: str, uid: str = Depends(get_ten
     return RedirectResponse(url="/dashboard", status_code=303)
 
 
-@app.post("/items/{item_id}/delete")
+@app.post("/item/{item_id}/delete")
 async def delete_item(item_id: str, uid: str = Depends(get_tenant_id)):
     """
     Deletes an item by ID
@@ -287,7 +287,7 @@ async def delete_item(item_id: str, uid: str = Depends(get_tenant_id)):
     return RedirectResponse(url="/dashboard", status_code=303)
 
 
-@app.delete("/items/{item_id}")
+@app.delete("/item/{item_id}")
 async def delete_item_api(item_id: str, uid: str = Depends(get_tenant_id)):
     """
     Deletes an item by ID (API)

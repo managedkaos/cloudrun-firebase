@@ -7,7 +7,7 @@
     <h2>My Items</h2>
     <p class="mb-4 text-secondary">Logged in as: {{ user.email }}</p>
 
-    <form action="/items/create" method="post" class="flex-col">
+    <form action="/item/create" method="post" class="flex-col">
         <div class="form-group">
             <label for="name">New Item Name</label>
             <input type="text" name="name" id="name" placeholder="Enter item name..." required>
@@ -27,9 +27,9 @@
         <li class="item">
             <span>{{ item.item_name }}</span>
             <div style="display: flex; gap: 0.5rem; align-items: center;">
-                <a href="/items/{{ item.id }}/edit" class="btn btn-secondary"
+                <a href="/item/{{ item.id }}/edit" class="btn btn-secondary"
                     style="padding: 0.5rem 1rem; font-size: 0.8rem; width: auto;">Edit</a>
-                <form action="/items/{{ item.id }}/delete" method="post" style="display:inline;"
+                <form action="/item/{{ item.id }}/delete" method="post" style="display:inline;"
                     onsubmit="return confirm('Are you sure you want to delete this item?');">
                     <button type="submit" class="btn btn-danger"
                         style="padding: 0.5rem 1rem; font-size: 0.8rem; width: auto;">Delete</button>
