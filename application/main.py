@@ -67,7 +67,10 @@ async def get_tenant_id(
     if api_key:
         key_doc = db.collection("api_keys").document(api_key).get()
         if key_doc.exists:
-            return key_doc.to_dict().get("uid")
+            uid = key_doc.to_dict().get("uid")
+            if not uid:
+                raise HTTPException(status_code=401, detail="Invalid API key")
+            return uid
 
     # Path B: Check Bearer Token (Frontend User)
     if token:
@@ -109,7 +112,10 @@ async def create_item(request: Request, uid: str = Depends(get_tenant_id)):
     """
     Creates a new item with an auto-generated ID
     """
-    form_data = await request.form()
+    try:
+        form_data = await request.form()
+    except Exception:
+        raise HTTPException(status_code=400, detail="Invalid form data")
     item_name = form_data.get("name")
 
     if not item_name:
@@ -131,20 +137,68 @@ async def create_item(request: Request, uid: str = Depends(get_tenant_id)):
     return RedirectResponse(url="/dashboard", status_code=303)
 
 
-@app.put("/items/{item_name}")
-async def update_or_create_item(item_name: str, payload: dict, uid: str = Depends(get_tenant_id)):
-    doc_ref = db.collection("user_data").document(uid).collection("items").document()
+@app.post("/items")
+async def create_item_api(request: Request, uid: str = Depends(get_tenant_id)):
+    """
+    Creates a new item with an auto-generated ID and returns JSON.
+    """
+    try:
+        payload = await request.json()
+    except json.JSONDecodeError:
+        raise HTTPException(status_code=400, detail="Invalid JSON payload")
+    if not isinstance(payload, dict):
+        raise HTTPException(status_code=400, detail="Invalid JSON payload")
+    item_name = payload.get("item_name") or payload.get("name")
+
+    if not item_name:
+        raise HTTPException(status_code=400, detail="Item name is required")
+
+    items_ref = db.collection("user_data").document(uid).collection("items")
+    doc_ref = items_ref.document()
+
+    doc_ref.set(
+        {
+            "item_name": item_name,
+            "id": doc_ref.id,
+            "owner_id": uid,
+            "created_at": firestore.SERVER_TIMESTAMP,
+            "updated_at": firestore.SERVER_TIMESTAMP,
+        },
+        merge=True,
+    )
+
+    logger.info("Created item %s for user %s via API", doc_ref.id, uid)
+    return {"id": doc_ref.id, "message": "Item created"}
+
+
+@app.put("/items/{item_id}")
+async def update_or_create_item(
+    item_id: str, payload: dict, uid: str = Depends(get_tenant_id)
+):
+    if not isinstance(payload, dict):
+        raise HTTPException(status_code=400, detail="Invalid JSON payload")
+
+
+    doc_ref = db.collection("user_data").document(uid).collection("items").document(
+        item_id
+    )
+
+    doc = doc_ref.get()
+    if not doc.exists:
+        raise HTTPException(status_code=404, detail="Item ID does not exist. Create the item first.")
+
+    data = {
+        "id": item_id,
+        "owner_id": uid,
+        "updated_at": firestore.SERVER_TIMESTAMP,
+    }
+    if payload.get("item_name") or payload.get("name"):
+        data["item_name"] = payload.get("item_name") or payload.get("name")
 
     # .set with merge=True behaves like a traditional PUT/UPSERT
-    doc_ref.set({
-        "item_name": item_name,
-        "id": doc_ref.id,
-        "owner_id": uid,
-        "created_at": firestore.SERVER_TIMESTAMP,
-        "updated_at": firestore.SERVER_TIMESTAMP
-    }, merge=True)
+    doc_ref.set(data, merge=True)
 
-    return {"id": doc_ref.id, "message": "Item updated/created"}
+    return {"id": item_id, "message": "Item updated/created"}
 
 
 @app.get("/items/{item_id}/edit", response_class=HTMLResponse)
@@ -186,13 +240,16 @@ async def update_item(request: Request, item_id: str, uid: str = Depends(get_ten
     """
     Updates an existing item by ID
     """
-    form_data = await request.form()
+    try:
+        form_data = await request.form()
+    except Exception:
+        raise HTTPException(status_code=400, detail="Invalid form data")
     item_name = form_data.get("name")
 
     if not item_name:
         raise HTTPException(status_code=400, detail="Item name is required")
 
-    # Update the document by ID
+    # Get the document reference
     doc_ref = db.collection("user_data").document(uid).collection("items").document(item_id)
 
     # Verify item exists and belongs to user
@@ -200,10 +257,15 @@ async def update_item(request: Request, item_id: str, uid: str = Depends(get_ten
     if not doc.exists:
         raise HTTPException(status_code=404, detail="Item not found")
 
-    doc_ref.update({
-        "item_name": item_name,
-        "updated_at": firestore.SERVER_TIMESTAMP
-    })
+    try:
+        # Update the document by ID
+        doc_ref.update({
+            "item_name": item_name,
+            "updated_at": firestore.SERVER_TIMESTAMP
+        })
+    except Exception:
+        logger.exception("Failed to update item %s for user %s", item_id, uid)
+        raise HTTPException(status_code=500, detail="Failed to update item")
 
     logger.info(f"Updated item {item_id} for user {uid}")
     return RedirectResponse(url="/dashboard", status_code=303)
@@ -214,11 +276,41 @@ async def delete_item(item_id: str, uid: str = Depends(get_tenant_id)):
     """
     Deletes an item by ID
     """
-    doc_ref = db.collection("user_data").document(uid).collection("items").document(item_id)
-    doc_ref.delete()
+    try:
+        doc_ref = db.collection("user_data").document(uid).collection("items").document(item_id)
+        doc_ref.delete()
+    except Exception:
+        logger.exception("Failed to delete item %s for user %s", item_id, uid)
+        raise HTTPException(status_code=500, detail="Failed to delete item")
 
     logger.info(f"Deleted item {item_id} for user {uid}")
     return RedirectResponse(url="/dashboard", status_code=303)
+
+
+@app.delete("/items/{item_id}")
+async def delete_item_api(item_id: str, uid: str = Depends(get_tenant_id)):
+    """
+    Deletes an item by ID (API)
+    """
+    try:
+        doc_ref = db.collection("user_data").document(uid).collection("items").document(item_id)
+
+        doc = doc_ref.get()
+        if not doc.exists:
+            raise HTTPException(status_code=404, detail="Item not found")
+
+        doc_ref.delete()
+
+    except HTTPException:
+        # Let HTTPExceptions through
+        raise
+
+    except Exception:
+        logger.exception("Failed to delete item %s for user %s", item_id, uid)
+        raise HTTPException(status_code=500, detail="Failed to delete item")
+
+    logger.info("Deleted item %s for user %s via API", item_id, uid)
+    return {"id": item_id, "message": "Item deleted"}
 
 
 @app.get("/items")
@@ -229,7 +321,7 @@ async def list_items(uid: str = Depends(get_tenant_id)):
     try:
         docs = list(items_ref.stream())
         logger.info("list_items:stream_complete uid=%s count=%s", uid, len(docs))
-        items = [doc.to_dict() for doc in docs]
+        items = [doc.to_dict() | {"id": doc.id} for doc in docs]
         logger.debug("list_items:success uid=%s", uid)
         return items
     except Exception:
@@ -244,8 +336,12 @@ async def health():
 @app.get("/debug-db")
 async def debug_db():
     # Attempt to list all keys in the collection
-    docs = db.collection("api_keys").stream()
-    keys_found = [doc.id for doc in docs]
+    try:
+        docs = db.collection("api_keys").stream()
+        keys_found = [doc.id for doc in docs]
+    except Exception:
+        logger.exception("Failed to access api_keys collection")
+        raise HTTPException(status_code=500, detail="Failed to access database")
     return {
         "project_id": os.getenv("GOOGLE_CLOUD_PROJECT"),
         "emulator_host": os.getenv("FIRESTORE_EMULATOR_HOST"),

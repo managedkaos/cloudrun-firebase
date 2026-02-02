@@ -24,32 +24,42 @@ def test_debug_db(base_url, http_session):
 
 def test_items_smoke_with_api_key(base_url, http_session, api_key):
     item_name = f"smoke-{uuid.uuid4().hex[:8]}"
+    item_id = None
 
-    create_response = http_session.post(
-        f"{base_url}/items/create",
-        headers={"X-API-KEY": api_key},
-        data={"id": "5WOzZlZViPqthOoWyvmR", "name": item_name},
-        timeout=10,
-        allow_redirects=False,
-    )
-    assert create_response.status_code == 303
+    try:
+        create_response = http_session.post(
+            f"{base_url}/items",
+            headers={"X-API-KEY": api_key},
+            json={"item_name": item_name},
+            timeout=10,
+        )
+        assert create_response.status_code == 200
+        item_id = create_response.json().get("id")
+        assert item_id
 
-    list_response = http_session.get(
-        f"{base_url}/items",
-        headers={"X-API-KEY": api_key},
-        timeout=10,
-    )
-    assert list_response.status_code == 200
-    items = list_response.json()
-    assert any(item.get("item_name") == item_name for item in items)
+        list_response = http_session.get(
+            f"{base_url}/items",
+            headers={"X-API-KEY": api_key},
+            timeout=10,
+        )
+        assert list_response.status_code == 200
+        items = list_response.json()
+        assert any(item.get("id") == item_id for item in items)
 
-    update_response = http_session.put(
-        f"{base_url}/items/{item_name}",
-        headers={"X-API-KEY": api_key},
-        json={"tag": "smoke"},
-        timeout=10,
-    )
-    assert update_response.status_code == 200
+        update_response = http_session.put(
+            f"{base_url}/items/{item_id}",
+            headers={"X-API-KEY": api_key},
+            json={"tag": "smoke-updated"},
+            timeout=10,
+        )
+        assert update_response.status_code == 200
+    finally:
+        if item_id:
+            http_session.post(
+                f"{base_url}/items/{item_id}/delete",
+                headers={"X-API-KEY": api_key},
+                timeout=10,
+            )
 
 
 def test_token_based_session_flow(base_url, http_session, auth_id_token):
@@ -68,3 +78,31 @@ def test_token_based_session_flow(base_url, http_session, auth_id_token):
     )
     assert dashboard_response.status_code == 200
     assert "test@example.com" in dashboard_response.text
+
+    item_name = f"smoke-session-{uuid.uuid4().hex[:8]}"
+    item_id = None
+    try:
+        create_response = http_session.post(
+            f"{base_url}/items",
+            headers={"Authorization": f"Bearer {auth_id_token}"},
+            json={"item_name": item_name},
+            timeout=10,
+        )
+        assert create_response.status_code == 200
+        item_id = create_response.json().get("id")
+        assert item_id
+
+        update_response = http_session.put(
+            f"{base_url}/items/{item_id}",
+            headers={"Authorization": f"Bearer {auth_id_token}"},
+            json={"tag": "session-smoke"},
+            timeout=10,
+        )
+        assert update_response.status_code == 200
+    finally:
+        if item_id:
+            http_session.post(
+                f"{base_url}/items/{item_id}/delete",
+                headers={"Authorization": f"Bearer {auth_id_token}"},
+                timeout=10,
+            )
