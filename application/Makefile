@@ -54,8 +54,9 @@ black:
 isort:
 	isort *.py
 
-#test:
-#	python -m unittest --verbose --failfast
+test:
+	pytest --verbose
+
 
 emulators:
 	firebase emulators:start \

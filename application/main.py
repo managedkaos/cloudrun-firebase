@@ -121,10 +121,11 @@ async def create_item(request: Request, uid: str = Depends(get_tenant_id)):
 
     doc_ref.set({
         "item_name": item_name,
+        "id": doc_ref.id,
         "owner_id": uid,
         "created_at": firestore.SERVER_TIMESTAMP,
         "updated_at": firestore.SERVER_TIMESTAMP
-    })
+    }, merge=True)
 
     logger.info(f"Created item {doc_ref.id} for user {uid}")
     return RedirectResponse(url="/dashboard", status_code=303)
@@ -132,23 +133,18 @@ async def create_item(request: Request, uid: str = Depends(get_tenant_id)):
 
 @app.put("/items/{item_name}")
 async def update_or_create_item(item_name: str, payload: dict, uid: str = Depends(get_tenant_id)):
-    """
-    Uses item_name as the Document ID to prevent duplicates.
-    """
-    # Sanitize the item_name to ensure it's a valid Firestore ID (no slashes)
-    doc_id = item_name.replace("/", "-")
-
-    doc_ref = db.collection("user_data").document(uid).collection("items").document(doc_id)
+    doc_ref = db.collection("user_data").document(uid).collection("items").document()
 
     # .set with merge=True behaves like a traditional PUT/UPSERT
     doc_ref.set({
-        **payload,
         "item_name": item_name,
+        "id": doc_ref.id,
         "owner_id": uid,
+        "created_at": firestore.SERVER_TIMESTAMP,
         "updated_at": firestore.SERVER_TIMESTAMP
     }, merge=True)
 
-    return {"id": doc_id, "message": "Item updated/created"}
+    return {"id": doc_ref.id, "message": "Item updated/created"}
 
 
 @app.get("/items/{item_id}/edit", response_class=HTMLResponse)
