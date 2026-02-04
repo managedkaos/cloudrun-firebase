@@ -1,5 +1,6 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -9,15 +10,17 @@
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="/static/css/style.css">
 </head>
+
 <body>
     <nav class="navbar">
         <a href="/" class="nav-brand">Cloud Run & Firebase</a>
         <div class="nav-links">
             {% if request.cookies.get("session") %}
-                <a href="/dashboard">Dashboard</a>
-                <a href="/logout">Logout</a>
+            <a href="/dashboard">Dashboard</a>
+            <a href="/docs" target="_blank">Docs</a>
+            <a href="/logout">Logout</a>
             {% else %}
-                <a href="/login">Login</a>
+            <a href="/login">Login</a>
             {% endif %}
         </div>
     </nav>
@@ -27,4 +30,5 @@
     </div>
 
 </body>
+
 </html>

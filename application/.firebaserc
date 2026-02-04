@@ -1,5 +1,5 @@
 {
   "projects": {
-    "default": "cloud-run-and-firebase-v2"
+    "default": "default-project"
   }
 }

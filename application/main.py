@@ -2,8 +2,12 @@ import logging
 import os
 import json
 
-os.environ["FIRESTORE_EMULATOR_HOST"] = "localhost:8081"
+
+# Get the existing value or fall back to the default
+os.environ["FIRESTORE_EMULATOR_HOST"] =  "localhost:8081"
 os.environ["FIREBASE_AUTH_EMULATOR_HOST"] = "localhost:9099"
+os.environ["GOOGLE_CLOUD_PROJECT"] = os.environ.get("GOOGLE_CLOUD_PROJECT", "default-project")
+
 
 from pydantic import BaseModel
 
@@ -201,7 +205,7 @@ async def update_or_create_item(
     return {"id": item_id, "message": "Item updated/created"}
 
 
-@app.get("/item/{item_id}/edit", response_class=HTMLResponse)
+@app.get("/edit/{item_id}", response_class=HTMLResponse)
 async def edit_item_form(request: Request, item_id: str):
     """
     Display the edit form for an item
@@ -235,7 +239,7 @@ async def edit_item_form(request: Request, item_id: str):
     })
 
 
-@app.post("/item/{item_id}/edit")
+@app.post("/edit/{item_id}")
 async def update_item(request: Request, item_id: str, uid: str = Depends(get_tenant_id)):
     """
     Updates an existing item by ID
@@ -271,10 +275,10 @@ async def update_item(request: Request, item_id: str, uid: str = Depends(get_ten
     return RedirectResponse(url="/dashboard", status_code=303)
 
 
-@app.post("/item/{item_id}/delete")
+@app.post("/delete/{item_id}")
 async def delete_item(item_id: str, uid: str = Depends(get_tenant_id)):
     """
-    Deletes an item by ID
+    Deletes an item by ID by POSTing from the form
     """
     try:
         doc_ref = db.collection("user_data").document(uid).collection("items").document(item_id)
@@ -290,7 +294,7 @@ async def delete_item(item_id: str, uid: str = Depends(get_tenant_id)):
 @app.delete("/item/{item_id}")
 async def delete_item_api(item_id: str, uid: str = Depends(get_tenant_id)):
     """
-    Deletes an item by ID (API)
+    Deletes an item by ID by DELETEing from the API
     """
     try:
         doc_ref = db.collection("user_data").document(uid).collection("items").document(item_id)

@@ -60,14 +60,8 @@ test:
 run-all-crud-steps:
 	./utils/run-all-crud-steps.sh
 
-emulators:
-	firebase emulators:start \
-		--only auth,firestore \
-		--import=./emulator_data \
-		--export-on-exit \
-		--debug
-
 local:
+	open http://localhost:8080
 	python -u -m uvicorn main:app --host "0.0.0.0" --port "8080" --reload
 
 build: lint test
@@ -76,7 +70,8 @@ build: lint test
 clean:
 	docker container stop $(APP) || true
 	docker container rm $(APP) || true
-	@rm -rf ./__pycache__ ./tests/__pycache__ .ruff_cache
-	@rm -f .*~ *.pyc
+	@/bin/rm -rvf ./__pycache__ ./tests/__pycache__ .ruff_cache
+	@/bin/rm -vf .*~ *.pyc
+	@/bin/rm -vf firebase-debug.log firestore-debug.log
 
 .PHONY: help requirements lint black isort test build clean development-requirements pre-commit-install pre-commit-run pre-commit-clean

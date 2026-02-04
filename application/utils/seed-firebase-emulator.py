@@ -3,10 +3,12 @@ import os
 import firebase_admin
 from firebase_admin import auth, firestore
 
+# Set GCP_PROJECT
+os.environ.setdefault("GCP_PROJECT", "default-project")
+
 # Point to the local emulators
-os.environ["FIRESTORE_EMULATOR_HOST"] = "localhost:8081"
-os.environ["FIREBASE_AUTH_EMULATOR_HOST"] = "localhost:9099"
-os.environ["GCP_PROJECT"] = "cloud-run-and-firebase-v2"
+os.environ.setdefault("FIRESTORE_EMULATOR_HOST", "localhost:8081")
+os.environ.setdefault("FIREBASE_AUTH_EMULATOR_HOST", "localhost:9099")
 
 firebase_admin.initialize_app()
 db = firestore.client()
