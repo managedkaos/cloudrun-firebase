@@ -209,3 +209,4 @@ emulator_data/
 .terraform/
 terraform.tfvars
 firebase-export*/
+.firebase/

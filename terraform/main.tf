@@ -1,12 +1,12 @@
 # --- 0. Variables ---
-variable "project_id" {
+variable "project_name" {
   type        = string
-  description = "The GCP Project ID (must be globally unique)"
+  description = "The GCP Project Name. Project names must be between 4 to 30 characters, with lowercase and/or uppercase letters, numbers, hyphens, single-quotes, double-quotes, spaces, and exclamation points. The project name is only used within Firebase interfaces and isn't visible to end-users."
 }
 
-variable "name" {
+variable "project_id" {
   type        = string
-  description = "The base name to use for the cloud run instance"
+  description = "The GCP Project ID; must be globally unique. Project IDs must be between 6 to 30 characters, with lowercase letters, digits, hyphens and must start with a letter. Trailing hyphens are prohibited."
 }
 
 variable "region" {
@@ -14,20 +14,61 @@ variable "region" {
   description = "The GCP region where resources are deployed"
 }
 
-# --- 1. Provider & Version Setup ---
-# For the gcs backend, you can set the GOOGLE_STORAGE_BUCKET
-# environment variable, which the backend configuration will read.
-# export GOOGLE_STORAGE_BUCKET="terraform-state-bucket-name"
+variable "billing_account" {
+  type        = string
+  description = "The billing account ID.  Firebase project must use the Blaze plan and be associated with a Cloud Billing account.  See https://console.cloud.google.com/billing/"
+}
+
+variable "org_id" {
+  type        = string
+  description = "The ID of the organization where resources will be created. You are not required to create an Organization resource to use Google Cloud. You can create, manage, and bill for projects as an individual user without an organization, but creating one is highly recommended for enterprise security, centralized control, and managing resources at scale. See https://console.cloud.google.com/organizations"
+}
+
+variable "email_address" {
+  type        = string
+  description = "The email address to use for budget notifications."
+}
+
+variable "budget_currency_code" {
+  type        = string
+  default     = "USD"
+  description = "The email address to use for budget notifications."
+}
+
+variable "budget_amount" {
+  type        = string
+  default     = "25"
+  description = "The email address to use for budget notifications."
+}
+
+variable "budget_calendar_period" {
+  type        = string
+  default     = "MONTH"
+  description = "Recurring time period for the budget.  Possible values are: MONTH, QUARTER, YEAR, and CALENDAR_PERIOD_UNSPECIFIED."
+}
+
+variable "budget_display_name" {
+  type        = string
+  default     = "Firebase Project Budget"
+  description = "The email address to use for budget notifications."
+}
+
+variable "cloud_run_name" {
+  type        = string
+  default     = "cloud-run"
+  description = "The base name to use for the cloud run instance"
+}
+
+# --- 1. State, Provider, and Project Setup ---
+# For the gcs backend, set the environment variable TERRAFORM_STATE_BUCKET.
+# Provide the bucket name when running `terraform init`.
+# terraform init -backend-config="bucket=${TERRAFORM_STATE_BUCKET}"
 terraform {
   backend "gcs" {
-    prefix = "terraform/state"
+    prefix = "terraform-v2/state"
   }
 
   required_providers {
-    google = {
-      source  = "hashicorp/google"
-      version = "~> 7.0"
-    }
     google-beta = {
       source  = "hashicorp/google-beta"
       version = "~> 7.0"
@@ -35,96 +76,149 @@ terraform {
   }
 }
 
-provider "google" {
-  project         = var.project_id
-  region          = var.region
-  billing_project = var.project_id
+provider "google-beta" {
+  alias                 = "user_project_override_true"
+  user_project_override = true
 }
 
 provider "google-beta" {
-  project               = var.project_id
-  region                = var.region
-  billing_project       = var.project_id
-  user_project_override = true
+  alias                 = "user_project_override_false"
+  user_project_override = false
+}
+
+# Create a new Google Cloud project.
+# https://registry.terraform.io/providers/hashicorp/google-beta/latest/docs/resources/google_project.html
+resource "google_project" "default" {
+  provider        = google-beta.user_project_override_true
+  name            = var.project_name
+  project_id      = var.project_id
+  billing_account = var.billing_account
+  org_id          = var.org_id
+
+  # Required for the project to display as a Firebase project.
+  labels = {
+    "firebase" = "enabled"
+  }
 }
 
 
 # --- 2. Enable Required APIs ---
+# https://registry.terraform.io/providers/hashicorp/google-beta/7.18.0/docs/resources/google_project_service
 resource "google_project_service" "services" {
+  project            = google_project.default.project_id
+  service            = each.key
+  disable_on_destroy = true
+
   for_each = toset([
     "apigateway.googleapis.com",        # API Gateway
     "apikeys.googleapis.com",           # API Key Credentials
     "artifactregistry.googleapis.com",  # Arifact Registry
+    "billingbudgets.googleapis.com",    # Billing API
     "cloudbuild.googleapis.com",        # Cloud Build
     "cloudfunctions.googleapis.com",    # Cloud Functions
     "firebase.googleapis.com",          # Firebase Management
+    "firebasehosting.googleapis.com",   # Firebase Hosting
     "firestore.googleapis.com",         # Firestore
     "identitytoolkit.googleapis.com",   # Firebase Auth
+    "monitoring.googleapis.com",        # Monitoring API
     "run.googleapis.com",               # Cloud Run
     "secretmanager.googleapis.com",     # Secret Manager
     "servicecontrol.googleapis.com",    # Service Control
     "servicemanagement.googleapis.com", # Service Management
+    "serviceusage.googleapis.com",      # Service Usage
   ])
-  service            = each.key
-  disable_on_destroy = false
 }
 
-# --- 3. Initialize Firebase & Firestore ---
+
+# --- 3. Initialize Firebase, Firestore, and Auth ---
+
+# Firebase
+# https://registry.terraform.io/providers/hashicorp/google-beta/latest/docs/resources/firebase_project
 resource "google_firebase_project" "default" {
-  provider   = google-beta
-  project    = var.project_id
+  provider   = google-beta.user_project_override_true
+  project    = google_project.default.project_id
   depends_on = [google_project_service.services]
 }
 
+# Firestore
+# https://registry.terraform.io/providers/hashicorp/google-beta/latest/docs/resources/firestore_database
 resource "google_firestore_database" "database" {
-  provider    = google-beta
-  project     = var.project_id
+  provider    = google-beta.user_project_override_true
+  project     = google_project.default.project_id
   name        = "(default)" # Firebase requires the "(default)" database
   location_id = var.region
   type        = "FIRESTORE_NATIVE"
   depends_on  = [google_firebase_project.default]
 }
 
-# --- 4. Configure Firebase Auth (Identity Platform) ---
-#
-# TODO: Break this out so it is only applied once per project
-#
-# resource "google_identity_platform_config" "auth" {
-#  provider = google-beta
-#  project  = var.project_id
-#  autodelete_anonymous_users = true
-#  sign_in {
-#    allow_duplicate_emails = false
-#    email {
-#      enabled           = true
-#      password_required = true
-#    }
-#  }
-#  depends_on = [google_project_service.services]
-#}
+# Firebase Auth (Identity Platform)
+# https://registry.terraform.io/providers/hashicorp/google-beta/latest/docs/resources/identity_platform_config
+resource "google_identity_platform_config" "auth" {
+  provider                   = google-beta.user_project_override_true
+  project                    = google_project.default.project_id
+  autodelete_anonymous_users = true
+  depends_on                 = [google_project_service.services]
+
+  multi_tenant {
+    allow_tenants           = false
+    default_tenant_location = null
+  }
+
+  sign_in {
+    allow_duplicate_emails = false
+    email {
+      enabled           = true
+      password_required = true
+    }
+    phone_number {
+      enabled            = false
+      test_phone_numbers = {}
+    }
+  }
+}
+
+# TODO: CONFIGURE THIS WHEN SECRETS MANAGER IS IN PLACE
+# resource "google_identity_platform_default_supported_idp_config" "google_sign_in" {
+#   provider = google-beta.user_project_override_true
+#   project  = google_firebase_project.default.project
+
+#   enabled       = true
+#   idp_id        = "google.com"
+#   client_id     = "<YOUR_OAUTH_CLIENT_ID>"
+#   client_secret = var.oauth_client_secret
+
+#   depends_on = [
+#     google_identity_platform_config.auth
+#   ]
+# }
+
 
 # --- 5. Cloud Run Service Setup ---
 
 # Create a dedicated Service Account for the Cloud Run instance
+# https://registry.terraform.io/providers/hashicorp/google/latest/docs/resources/google_service_account
 resource "google_service_account" "cloud_run_sa" {
-  account_id   = "cloud-run-sa"
-  display_name = "Cloud Run Service Account"
+  project                      = google_project.default.project_id
+  account_id                   = "cloud-run-sa"
+  display_name                 = "Cloud Run Service Account"
+  create_ignore_already_exists = true
 }
 
 # Grant the Service Account access to Firestore
 resource "google_project_iam_member" "firestore_user" {
-  project = var.project_id
+  project = google_project.default.project_id
   role    = "roles/datastore.user"
   member  = "serviceAccount:${google_service_account.cloud_run_sa.email}"
 }
 
 # https://registry.terraform.io/providers/hashicorp/google/latest/docs/resources/cloud_run_v2_service
 resource "google_cloud_run_v2_service" "cloud_run" {
-  name     = var.name
-  location = var.region
-
-  # change this to true to prevent accidental deletion
+  provider            = google-beta.user_project_override_true
+  project             = google_project.default.project_id
+  name                = var.cloud_run_name
+  location            = var.region
   deletion_protection = false
+  depends_on          = [google_secret_manager_secret_iam_member.firebase_config_access]
 
   template {
     service_account = google_service_account.cloud_run_sa.email
@@ -146,7 +240,6 @@ resource "google_cloud_run_v2_service" "cloud_run" {
       }
     }
   }
-  depends_on = [google_firestore_database.database]
 
   lifecycle {
     ignore_changes = [
@@ -158,24 +251,24 @@ resource "google_cloud_run_v2_service" "cloud_run" {
   }
 }
 
-# --- 6. Allow Public Access ---
+# https://registry.terraform.io/providers/hashicorp/google/latest/docs/resources/cloud_run_v2_service_iam#google_cloud_run_v2_service_iam_member
 resource "google_cloud_run_v2_service_iam_member" "public_access" {
+  provider = google-beta.user_project_override_true
+  project  = google_project.default.project_id
   name     = google_cloud_run_v2_service.cloud_run.name
   location = google_cloud_run_v2_service.cloud_run.location
   role     = "roles/run.invoker"
   member   = "allUsers"
 }
 
-# --- 7. Blocking Function & Secrets ---
-
+# --- X. Secrets ---
 # Create Secret for Firebase Config
+# https://registry.terraform.io/providers/hashicorp/google/latest/docs/resources/secret_manager_secret.html
 resource "google_secret_manager_secret" "firebase_config" {
-  provider   = google-beta
-  project    = var.project_id
-  secret_id  = "firebase-config"
-  depends_on = [google_project_service.services]
-
-  # change this to true to prevent accidental deletion
+  provider            = google-beta.user_project_override_true
+  project             = google_project.default.project_id
+  secret_id           = "firebase-config"
+  depends_on          = [google_project_service.services]
   deletion_protection = false
 
   replication {
@@ -185,7 +278,8 @@ resource "google_secret_manager_secret" "firebase_config" {
 
 # Create Initial placeholder for Firebase Config
 resource "google_secret_manager_secret_version" "firebase_config_version" {
-  provider    = google-beta
+  provider    = google-beta.user_project_override_true
+  project     = google_project.default.project_id
   secret      = google_secret_manager_secret.firebase_config.id
   secret_data = "{}"
 
@@ -199,11 +293,32 @@ resource "google_secret_manager_secret_version" "firebase_config_version" {
 
 # Grant Cloud Run Access to the Firebase Config Secret
 resource "google_secret_manager_secret_iam_member" "firebase_config_access" {
+  provider  = google-beta.user_project_override_true
+  project   = google_project.default.project_id
   secret_id = google_secret_manager_secret.firebase_config.secret_id
-  role      = "roles/secretmanager.secretAccessor"
   member    = "serviceAccount:${google_service_account.cloud_run_sa.email}"
+  role      = "roles/secretmanager.secretAccessor"
 }
 
+# https://registry.terraform.io/providers/hashicorp/google/latest/docs/resources/firebase_web_app
+resource "google_firebase_web_app" "default" {
+  provider     = google-beta.user_project_override_true
+  project      = google_project.default.project_id
+  display_name = "Default Firebase Web App"
+}
+
+# https://registry.terraform.io/providers/hashicorp/google-beta/latest/docs/resources/firebase_hosting_site
+resource "google_firebase_hosting_site" "full" {
+  provider   = google-beta.user_project_override_true
+  project    = google_project.default.project_id
+  site_id    = google_project.default.project_id
+  app_id     = google_firebase_web_app.default.app_id
+  depends_on = [google_project_service.services]
+
+}
+
+
+# --- X. Provision blocking functions ---
 # Create Secret for Allowed Emails
 resource "google_secret_manager_secret" "auth_allowed_emails" {
   provider   = google-beta
@@ -234,23 +349,25 @@ resource "google_secret_manager_secret_version" "auth_allowed_emails_version" {
 }
 
 # Service Account for the Function
-resource "google_service_account" "function_sa" {
-  account_id   = "auth-blocking-function-sa"
-  display_name = "Auth Blocking Function Service Account"
+resource "google_service_account" "blocking_function_sa" {
+  provider     = google-beta.user_project_override_true
+  project      = google_project.default.project_id
+  account_id   = "blocking-function-sa"
+  display_name = "Blocking Function Service Account"
 }
 
 # Grant Function SA access to the Secret
-resource "google_secret_manager_secret_iam_member" "function_sa_secret_access" {
-  project   = var.project_id
+resource "google_secret_manager_secret_iam_member" "blocking_function_sa_secret_access" {
+  provider  = google-beta.user_project_override_true
+  project   = google_project.default.project_id
   secret_id = google_secret_manager_secret.auth_allowed_emails.secret_id
   role      = "roles/secretmanager.secretAccessor"
-  member    = "serviceAccount:${google_service_account.function_sa.email}"
+  member    = "serviceAccount:${google_service_account.blocking_function_sa.email}"
 }
-
 # Storage Bucket for Function Source
 resource "google_storage_bucket" "function_bucket" {
-  provider                    = google-beta
-  project                     = var.project_id
+  provider                    = google-beta.user_project_override_true
+  project                     = google_project.default.project_id
   name                        = "${var.project_id}-gcf-source"
   location                    = var.region
   uniform_bucket_level_access = true
@@ -266,15 +383,16 @@ data "archive_file" "function_zip" {
 
 # Upload zip to bucket
 resource "google_storage_bucket_object" "function_archive" {
-  name   = "blocking_functions.${data.archive_file.function_zip.output_md5}.zip"
-  bucket = google_storage_bucket.function_bucket.name
-  source = data.archive_file.function_zip.output_path
+  provider = google-beta.user_project_override_true
+  name     = "blocking_functions.${data.archive_file.function_zip.output_md5}.zip"
+  bucket   = google_storage_bucket.function_bucket.name
+  source   = data.archive_file.function_zip.output_path
 }
 
 # Cloud Function (Gen 2)
 resource "google_cloudfunctions2_function" "blocking_function" {
-  provider = google-beta
-  project  = var.project_id
+  provider = google-beta.user_project_override_true
+  project  = google_project.default.project_id
   name     = "auth-before-create"
   location = var.region
 
@@ -293,119 +411,33 @@ resource "google_cloudfunctions2_function" "blocking_function" {
     max_instance_count    = 10
     available_memory      = "256M"
     timeout_seconds       = 60
-    service_account_email = google_service_account.function_sa.email
+    service_account_email = google_service_account.blocking_function_sa.email
     environment_variables = {
-      GCLOUD_PROJECT = var.project_id
+      # TODO: Settle on one var; see ../blocking_functions
+      GCLOUD_PROJECT       = var.project_id
+      GOOGLE_CLOUD_PROJECT = var.project_id
     }
   }
 
   depends_on = [
     google_project_service.services,
-    google_secret_manager_secret_iam_member.function_sa_secret_access
+    google_secret_manager_secret_iam_member.blocking_function_sa_secret_access
   ]
 }
 
-# --- 8. API Gateway ---
-resource "google_api_gateway_api" "api" {
-  provider = google-beta
-  project  = var.project_id
-  api_id   = "${var.name}-api"
-
-  depends_on = [google_project_service.services]
-}
-
-resource "google_api_gateway_api_config" "api_config" {
-  provider             = google-beta
-  project              = var.project_id
-  api                  = google_api_gateway_api.api.api_id
-  api_config_id_prefix = "${var.name}-"
-
-  # Creates the new config before trying to delete the old one
-  lifecycle {
-    create_before_destroy = true
-  }
-
-  gateway_config {
-    backend_config {
-      google_service_account = google_service_account.gateway_sa.email
-    }
-  }
-
-  openapi_documents {
-    document {
-      path = "api-gateway-openapi.yaml"
-      contents = base64encode(templatefile("${path.module}/api-gateway-openapi.yaml", {
-        cloud_run_url = google_cloud_run_v2_service.cloud_run.uri
-      }))
-    }
-  }
+# Create the Artifact Registry repository
+resource "google_artifact_registry_repository" "cloud_run_source_deploy" {
+  provider      = google-beta.user_project_override_true
+  project       = google_project.default.project_id
+  location      = var.region
+  repository_id = "cloud-run-source-deploy"
+  description   = "Docker repository for Cloud Run source deployments"
+  format        = "DOCKER"
 
   depends_on = [
-    google_project_service.services,
-    google_cloud_run_v2_service.cloud_run
+    google_project_service.artifact_registry,
   ]
 }
-
-resource "google_api_gateway_gateway" "api_gateway" {
-  provider   = google-beta
-  project    = var.project_id
-  region     = var.region
-  gateway_id = "${var.name}-gateway"
-  api_config = google_api_gateway_api_config.api_config.id
-
-  depends_on = [google_api_gateway_api_config.api_config]
-}
-
-resource "google_service_account" "gateway_sa" {
-  account_id   = "api-gateway-sa"
-  display_name = "API Gateway Service Account"
-}
-
-resource "google_cloud_run_service_iam_member" "gateway_invoker" {
-  service  = google_cloud_run_v2_service.cloud_run.name
-  location = google_cloud_run_v2_service.cloud_run.location
-  role     = "roles/run.invoker"
-  member   = "serviceAccount:${google_service_account.gateway_sa.email}"
-}
-
-# API Gateway managed service can be eventually consistent right after config creation.
-# resource "time_sleep" "wait_for_api_gateway_config" {
-#   create_duration = "60s"
-#   depends_on      = [google_api_gateway_api_config.api_config]
-# }
-
-# Enable the api gateway managed service
-resource "google_project_service" "api_gateway_managed_service" {
-  service            = google_api_gateway_api.api.managed_service
-  disable_on_destroy = false
-
-  depends_on = [
-    google_api_gateway_api.api
-  ]
-}
-
-# TODO: Figure out how to create an API Key in terraform
-# Create an API Key
-# resource "google_apikeys_key" "api_key" {
-#   name         = "${var.name}-key"
-#   display_name = "API Key for testing ${var.name}"
-#   project      = var.project_id
-
-#   restrictions {
-#     api_targets {
-#       service = google_api_gateway_api.api.managed_service
-#       # Optional: restrict to specific methods/paths
-#       # methods = ["GET*"]
-#     }
-#   }
-
-#   # Ensure the managed service is active before creating the key
-#   depends_on = [
-#     google_project_service.services,
-#     google_project_service.api_gateway_managed_service
-#   ]
-
-# }
 
 # --- 9. Outputs ---
 output "project_id" {
@@ -426,23 +458,3 @@ output "fastapi_docs" {
   value       = "${google_cloud_run_v2_service.cloud_run.uri}/docs"
   description = "The publicly accessible URL of the Cloud Run service"
 }
-
-output "blocking_function_uri" {
-  value = google_cloudfunctions2_function.blocking_function.service_config[0].uri
-}
-
-output "api_gateway_hostname" {
-  value       = google_api_gateway_gateway.api_gateway.default_hostname
-  description = "Hostname for the API Gateway endpoint"
-}
-
-output "api_gateway_url" {
-  value       = "https://${google_api_gateway_gateway.api_gateway.default_hostname}/api"
-  description = "Base URL for the API Gateway /api routes"
-}
-
-# TODO: Output the key when creation is working
-# output "api_key_value" {
-#   value     = google_apikeys_key.api_key.key_string
-#   sensitive = true
-# }

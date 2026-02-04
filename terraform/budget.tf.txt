@@ -1,0 +1,57 @@
+# --- 2. Configure budget monitoring ---
+resource "google_monitoring_notification_channel" "email" {
+  project      = google_project.default.project_id
+  display_name = var.budget_display_name
+  type         = "email"
+  labels = {
+    email_address = var.email_address
+  }
+
+  # Wait until the required APIs are enabled.
+  depends_on = [
+    google_project_service.services
+  ]
+}
+
+# https://registry.terraform.io/providers/hashicorp/google/latest/docs/resources/billing_budget.html
+resource "google_billing_budget" "budget" {
+  provider        = google-beta.user_project_override_true
+  billing_account = var.billing_account
+  display_name    = var.budget_display_name
+
+  budget_filter {
+    projects        = ["projects/${google_project.default.number}"]
+    calendar_period = var.budget_calendar_period
+  }
+
+  amount {
+    specified_amount {
+      currency_code = var.budget_currency_code
+      units         = var.budget_amount
+    }
+  }
+
+  threshold_rules {
+    threshold_percent = 0.5 # Alert at 50%
+  }
+
+  threshold_rules {
+    threshold_percent = 0.9 # Alert at 90%
+  }
+
+  threshold_rules {
+    threshold_percent = 1.0 # Alert at 100%
+  }
+
+  all_updates_rule {
+    monitoring_notification_channels = [
+      google_monitoring_notification_channel.email.id
+    ]
+  }
+
+  # Wait until the email is created
+  depends_on = [
+    google_monitoring_notification_channel.email
+  ]
+
+}

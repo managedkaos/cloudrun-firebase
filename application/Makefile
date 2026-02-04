@@ -74,4 +74,11 @@ clean:
 	@/bin/rm -vf .*~ *.pyc
 	@/bin/rm -vf firebase-debug.log firestore-debug.log
 
+deploy:
+	gcloud run deploy $(SERVICE_NAME) \
+		--source . \
+		--project $(PROJECT_ID) \
+		--region $(REGION) \
+		--allow-unauthenticated
+
 .PHONY: help requirements lint black isort test build clean development-requirements pre-commit-install pre-commit-run pre-commit-clean
