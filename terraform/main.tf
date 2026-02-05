@@ -110,22 +110,23 @@ resource "google_project_service" "services" {
   disable_on_destroy = true
 
   for_each = toset([
-    "apigateway.googleapis.com",        # API Gateway
-    "apikeys.googleapis.com",           # API Key Credentials
-    "artifactregistry.googleapis.com",  # Arifact Registry
-    "billingbudgets.googleapis.com",    # Billing API
-    "cloudbuild.googleapis.com",        # Cloud Build
-    "cloudfunctions.googleapis.com",    # Cloud Functions
-    "firebase.googleapis.com",          # Firebase Management
-    "firebasehosting.googleapis.com",   # Firebase Hosting
-    "firestore.googleapis.com",         # Firestore
-    "identitytoolkit.googleapis.com",   # Firebase Auth
-    "monitoring.googleapis.com",        # Monitoring API
-    "run.googleapis.com",               # Cloud Run
-    "secretmanager.googleapis.com",     # Secret Manager
-    "servicecontrol.googleapis.com",    # Service Control
-    "servicemanagement.googleapis.com", # Service Management
-    "serviceusage.googleapis.com",      # Service Usage
+    "apigateway.googleapis.com",         # API Gateway
+    "apikeys.googleapis.com",            # API Key Credentials
+    "artifactregistry.googleapis.com",   # Arifact Registry
+    "billingbudgets.googleapis.com",     # Billing API
+    "cloudbuild.googleapis.com",         # Cloud Build
+    "cloudfunctions.googleapis.com",     # Cloud Functions
+    "firebase.googleapis.com",           # Firebase Management
+    "firebaseextensions.googleapis.com", # Firebase Extensions
+    "firebasehosting.googleapis.com",    # Firebase Hosting
+    "firestore.googleapis.com",          # Firestore
+    "identitytoolkit.googleapis.com",    # Firebase Auth
+    "monitoring.googleapis.com",         # Monitoring API
+    "run.googleapis.com",                # Cloud Run
+    "secretmanager.googleapis.com",      # Secret Manager
+    "servicecontrol.googleapis.com",     # Service Control
+    "servicemanagement.googleapis.com",  # Service Management
+    "serviceusage.googleapis.com",       # Service Usage
   ])
 }
 
@@ -153,29 +154,75 @@ resource "google_firestore_database" "database" {
 
 # Firebase Auth (Identity Platform)
 # https://registry.terraform.io/providers/hashicorp/google-beta/latest/docs/resources/identity_platform_config
-resource "google_identity_platform_config" "auth" {
-  provider                   = google-beta.user_project_override_true
-  project                    = google_project.default.project_id
-  autodelete_anonymous_users = true
-  depends_on                 = [google_project_service.services]
+# resource "google_identity_platform_config" "auth" {
+#   provider                   = google-beta.user_project_override_true
+#   project                    = google_project.default.project_id
+#   autodelete_anonymous_users = true
+#   depends_on                 = [google_project_service.services]
 
-  multi_tenant {
-    allow_tenants           = false
-    default_tenant_location = null
-  }
+#   blocking_functions {
+#     # Dynamically create a trigger block for each blocking function
+#     dynamic "triggers" {
+#       for_each = google_cloudfunctions2_function.blocking_functions
+#       content {
+#         function_uri = triggers.value.service_config[0].uri
+#         event_type   = triggers.value.build_config[0].entry_point
+#       }
+#     }
 
-  sign_in {
-    allow_duplicate_emails = false
-    email {
-      enabled           = true
-      password_required = true
-    }
-    phone_number {
-      enabled            = false
-      test_phone_numbers = {}
-    }
-  }
+#     # Forward ID tokens or Access tokens to the function
+#     forward_inbound_credentials {
+#       id_token      = true
+#       access_token  = false
+#       refresh_token = false
+#     }
+#   }
+
+#   multi_tenant {
+#     allow_tenants           = false
+#     default_tenant_location = null
+#   }
+
+#   sign_in {
+#     allow_duplicate_emails = false
+#     email {
+#       enabled           = true
+#       password_required = true
+#     }
+#     phone_number {
+#       enabled            = false
+#       test_phone_numbers = {}
+#     }
+#   }
+# }
+
+# Allow the Identity Platform service agent to call the blocking function
+# resource "google_cloud_run_service_iam_member" "invoker" {
+#   for_each = google_cloudfunctions2_function.blocking_functions
+#   project  = google_project.default.project_id
+#   location = each.value.location
+#   service  = each.value.name
+#   role     = "roles/run.invoker"
+#   #member     = "serviceAccount:${var.project_id}@appspot.gserviceaccount.com"
+#   #member     = "serviceAccount:service-${google_project.default.number}@gcp-sa-identitytoolkit.iam.gserviceaccount.com"
+#   #member     = "allUsers"
+#   member = "serviceAccount:${google_project_service_identity.identity_toolkit.email}"
+
+#   #depends_on = [google_project_service.services]
+#   depends_on = [
+#     google_project_service.services,
+#     google_project_service_identity.identity_toolkit
+#   ]
+# }
+
+# https://registry.terraform.io/providers/hashicorp/google/latest/docs/resources/project_service_identity
+# Force creation of the Identity Toolkit service account
+resource "google_project_service_identity" "identity_toolkit" {
+  provider = google-beta.user_project_override_true
+  project  = google_project.default.project_id
+  service  = "identitytoolkit.googleapis.com"
 }
+
 
 # TODO: CONFIGURE THIS WHEN SECRETS MANAGER IS IN PLACE
 # resource "google_identity_platform_default_supported_idp_config" "google_sign_in" {
@@ -210,6 +257,7 @@ resource "google_project_iam_member" "firestore_user" {
   role    = "roles/datastore.user"
   member  = "serviceAccount:${google_service_account.cloud_run_sa.email}"
 }
+
 
 # https://registry.terraform.io/providers/hashicorp/google/latest/docs/resources/cloud_run_v2_service
 resource "google_cloud_run_v2_service" "cloud_run" {
@@ -267,7 +315,7 @@ resource "google_cloud_run_v2_service_iam_member" "public_access" {
 resource "google_secret_manager_secret" "firebase_config" {
   provider            = google-beta.user_project_override_true
   project             = google_project.default.project_id
-  secret_id           = "firebase-config"
+  secret_id           = "FIREBASE_CONFIG_JSON"
   depends_on          = [google_project_service.services]
   deletion_protection = false
 
@@ -364,6 +412,7 @@ resource "google_secret_manager_secret_iam_member" "blocking_function_sa_secret_
   role      = "roles/secretmanager.secretAccessor"
   member    = "serviceAccount:${google_service_account.blocking_function_sa.email}"
 }
+
 # Storage Bucket for Function Source
 resource "google_storage_bucket" "function_bucket" {
   provider                    = google-beta.user_project_override_true
@@ -390,15 +439,25 @@ resource "google_storage_bucket_object" "function_archive" {
 }
 
 # Cloud Function (Gen 2)
-resource "google_cloudfunctions2_function" "blocking_function" {
+# Define the triggers for the blocking functions
+variable "auth_triggers" {
+  default = {
+    "before-create"  = "beforeCreate" # Triggered on first-time signup
+    "before-sign-in" = "beforeSignIn" # Triggered on every subsequent login
+  }
+}
+
+resource "google_cloudfunctions2_function" "blocking_functions" {
+  for_each = var.auth_triggers
+
   provider = google-beta.user_project_override_true
   project  = google_project.default.project_id
-  name     = "auth-before-create"
+  name     = "auth-${each.key}"
   location = var.region
 
   build_config {
     runtime     = "nodejs24"
-    entry_point = "beforeCreate" # Export name in index.js
+    entry_point = each.value # beforeCreate and beforeSignIn
     source {
       storage_source {
         bucket = google_storage_bucket.function_bucket.name
@@ -412,10 +471,17 @@ resource "google_cloudfunctions2_function" "blocking_function" {
     available_memory      = "256M"
     timeout_seconds       = 60
     service_account_email = google_service_account.blocking_function_sa.email
+
     environment_variables = {
-      # TODO: Settle on one var; see ../blocking_functions
-      GCLOUD_PROJECT       = var.project_id
-      GOOGLE_CLOUD_PROJECT = var.project_id
+      GOOGLE_CLOUD_PROJECT    = var.project_id
+      FUNCTION_SIGNATURE_TYPE = "cloudevent"
+    }
+
+    secret_environment_variables {
+      key        = "AUTH_ALLOWED_EMAILS"
+      project_id = var.project_id
+      secret     = google_secret_manager_secret.auth_allowed_emails.secret_id
+      version    = "latest"
     }
   }
 

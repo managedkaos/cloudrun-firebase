@@ -70,5 +70,12 @@
         "destination": "/index.html"
       }
     ]
-  }
+  },
+  "functions": [
+    {
+      "source": "auth_functions",
+      "codebase": "default",
+      "runtime": "nodejs24"
+    }
+  ]
 }

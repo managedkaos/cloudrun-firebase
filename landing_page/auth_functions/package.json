@@ -7,6 +7,6 @@
         "@google-cloud/functions-framework": "^3.5.0"
     },
     "engines": {
-        "node": "24"
+        "node": "22"
     }
 }

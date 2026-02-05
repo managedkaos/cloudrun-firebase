@@ -20,7 +20,6 @@ from fastapi.templating import Jinja2Templates
 from firebase_admin import auth, firestore, initialize_app
 from pydantic import BaseModel
 
-
 # Only set these when NOT running on Cloud Run
 if not os.getenv("K_SERVICE"):
     os.environ["FIRESTORE_EMULATOR_HOST"] = "localhost:8081"
@@ -58,9 +57,12 @@ templates = Jinja2Templates(directory="templates")
 firebase_config_raw = os.getenv("FIREBASE_CONFIG_JSON")
 
 if firebase_config_raw:
-    firebase_config = json.loads(firebase_config_raw)
+    try:
+        firebase_config = json.loads(firebase_config_raw)
+    except json.JSONDecodeError as e:
+        logger.error(f"Failed to parse FIREBASE_CONFIG_JSON: {e}")
+        firebase_config = {}  # Fallback
 else:
-    # Fallback for local development
     firebase_config = {}
 
 

@@ -1,4 +1,4 @@
-PROJECT_ID = default-project
+#PROJECT_ID = default-project
 emulators:
 	open http://localhost:4000
 	firebase emulators:start \
@@ -12,5 +12,5 @@ clean:
 	@/bin/rm -vf firebase-debug.log firestore-debug.log
 
 deploy:
-	firebase deploy --only hosting --project $(PROJECT_ID)
-
+	firebase functions:secrets:access auth-allowed-emails --project $(PROJECT_ID)
+	firebase deploy --only hosting,functions --project $(PROJECT_ID)

@@ -1,0 +1,94 @@
+const functions = require('@google-cloud/functions-framework');
+
+// Helper function to validate email
+const validateEmail = (email) => {
+    if (!email) {
+        throw new Error('Email is required.');
+    }
+
+    // Access the secret from process.env
+    const rawAllowedEmails = process.env.AUTH_ALLOWED_EMAILS;
+
+    if (!rawAllowedEmails) {
+        console.error('AUTH_ALLOWED_EMAILS environment variable is missing or empty');
+        throw new Error('Configuration error: authorized emails list not found.');
+    }
+
+    // Parse allowed emails
+    const allowedEmails = rawAllowedEmails
+        .split(',')
+        .map(e => e.trim().toLowerCase())
+        .filter(e => e.length > 0);
+
+    console.log(`Validating email: ${email} against ${allowedEmails.length} allowed emails`);
+
+    // Check if email is allowed
+    if (!allowedEmails.includes(email.toLowerCase())) {
+        console.warn(`Access denied: ${email} is not authorized`);
+        throw new Error('This email is not authorized to sign up.');
+    }
+
+    console.log(`Access granted: ${email} is authorized`);
+};
+
+// Before Create Handler
+functions.http('beforeCreate', async (req, res) => {
+    try {
+        console.log('=== beforeCreate triggered ===');
+        console.log('Request method:', req.method);
+        console.log('Request headers:', JSON.stringify(req.headers, null, 2));
+        console.log('Request body:', JSON.stringify(req.body, null, 2));
+
+        // Try different paths where email might be
+        const email = req.body?.data?.email 
+                   || req.body?.email 
+                   || req.body?.data?.customClaims?.email
+                   || req.body?.userRecord?.email;
+
+        console.log('Extracted email:', email);
+
+        validateEmail(email);
+
+        // Return success
+        res.status(200).json({});
+    } catch (error) {
+        console.error('Error in beforeCreate:', error);
+        res.status(400).json({
+            error: {
+                message: error.message || 'An error occurred',
+                status: 'INVALID_ARGUMENT'
+            }
+        });
+    }
+});
+
+// Before Sign In Handler
+functions.http('beforeSignIn', async (req, res) => {
+    try {
+        console.log('=== beforeSignIn triggered ===');
+        console.log('Request method:', req.method);
+        console.log('Request headers:', JSON.stringify(req.headers, null, 2));
+        console.log('Request body:', JSON.stringify(req.body, null, 2));
+
+        // Try different paths where email might be
+        const email = req.body?.data?.email 
+                   || req.body?.email 
+                   || req.body?.data?.customClaims?.email
+                   || req.body?.userRecord?.email;
+
+        console.log('Extracted email:', email);
+
+        validateEmail(email);
+
+        // Return success
+        res.status(200).json({});
+    } catch (error) {
+        console.error('Error in beforeSignIn:', error);
+        res.status(400).json({
+            error: {
+                message: error.message || 'An error occurred',
+                status: 'INVALID_ARGUMENT'
+            }
+        });
+    }
+});
