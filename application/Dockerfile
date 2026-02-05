@@ -14,8 +14,10 @@ COPY requirements.txt .
 # Install Python dependencies
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Copy application code
+# Copy only required application files
 COPY main.py .
+COPY static ./static
+COPY templates ./templates
 
 # Expose port 8080 (Cloud Run default)
 # Cloud Run injects the PORT environment variable. Default to 8080 for local.
@@ -23,4 +25,4 @@ ENV PORT=8080
 EXPOSE 8080
 
 # Run the application with uvicorn
-CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8080"]
+CMD uvicorn main:app --host 0.0.0.0 --port ${PORT:-8080}

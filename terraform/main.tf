@@ -226,7 +226,7 @@ resource "google_cloud_run_v2_service" "cloud_run" {
       # Use a placeholder image initially
       image = "us-docker.pkg.dev/cloudrun/container/hello"
       env {
-        name  = "PROJECT_ID"
+        name  = "GOOGLE_CLOUD_PROJECT"
         value = var.project_id
       }
       env {
@@ -435,7 +435,7 @@ resource "google_artifact_registry_repository" "cloud_run_source_deploy" {
   format        = "DOCKER"
 
   depends_on = [
-    google_project_service.artifact_registry,
+    google_project_service.services,
   ]
 }
 

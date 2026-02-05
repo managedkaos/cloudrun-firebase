@@ -42,7 +42,7 @@ x_pre-commit-clean:
 
 lint:
 	flake8 --ignore=E501,E231 *.py
-	pylint --errors-only --disable=C0301 *.py
+	pylint --errors-only --disable=C0301,E1101 *.py
 	black --diff *.py
 	isort --check-only --diff *.py
 
@@ -64,7 +64,10 @@ local:
 	open http://localhost:8080
 	python -u -m uvicorn main:app --host "0.0.0.0" --port "8080" --reload
 
-build: lint test
+local-docker:
+	docker run --rm -p 8080:8080 -v ~/.config/gcloud/application_default_credentials.json:/gcp/creds.json:ro -e GOOGLE_APPLICATION_CREDENTIALS=/gcp/creds.json $(APP):$(TAG)
+
+build: lint
 	docker build --tag $(APP):$(TAG) .
 
 clean:

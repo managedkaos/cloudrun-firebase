@@ -1,24 +1,33 @@
+import json
 import logging
 import os
-import json
 
-
-# Get the existing value or fall back to the default
-os.environ["FIRESTORE_EMULATOR_HOST"] =  "localhost:8081"
-os.environ["FIREBASE_AUTH_EMULATOR_HOST"] = "localhost:9099"
-os.environ["GOOGLE_CLOUD_PROJECT"] = os.environ.get("GOOGLE_CLOUD_PROJECT", "default-project")
-
-
-from pydantic import BaseModel
-
-from fastapi.responses import HTMLResponse, RedirectResponse, JSONResponse
-from fastapi import Depends, FastAPI, Request, HTTPException, Security, Cookie, status, Response
+from fastapi import (
+    Cookie,
+    Depends,
+    FastAPI,
+    HTTPException,
+    Request,
+    Security,
+    status,
+)
+from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
 from fastapi.security import APIKeyHeader, HTTPAuthorizationCredentials, HTTPBearer
+from fastapi.staticfiles import StaticFiles
+from fastapi.templating import Jinja2Templates
 
 # from firebase_admin import auth, credentials, firestore, initialize_app
 from firebase_admin import auth, firestore, initialize_app
-from fastapi.templating import Jinja2Templates
-from fastapi.staticfiles import StaticFiles
+from pydantic import BaseModel
+
+
+# Only set these when NOT running on Cloud Run
+if not os.getenv("K_SERVICE"):
+    os.environ["FIRESTORE_EMULATOR_HOST"] = "localhost:8081"
+    os.environ["FIREBASE_AUTH_EMULATOR_HOST"] = "localhost:9099"
+    os.environ["GOOGLE_CLOUD_PROJECT"] = os.environ.get(
+        "GOOGLE_CLOUD_PROJECT", "default-project"
+    )
 
 # 0. Initialize Logger
 logging.basicConfig(
@@ -54,18 +63,21 @@ else:
     # Fallback for local development
     firebase_config = {}
 
+
 class SessionRequest(BaseModel):
     token: str
+
 
 # 2. Security Schemes
 api_key_header = APIKeyHeader(name="X-API-KEY", auto_error=False)
 bearer_scheme = HTTPBearer(auto_error=False)
 
+
 # 3. Identity Resolver Dependency
 async def get_tenant_id(
     api_key: str = Security(api_key_header),
     token: HTTPAuthorizationCredentials = Depends(bearer_scheme),
-    session: str = Cookie(None) # Look for a cookie named 'session'
+    session: str = Cookie(None),  # Look for a cookie named 'session'
 ) -> str:
     # Path A: Check API Key (Automation)
     if api_key:
@@ -101,7 +113,7 @@ async def get_tenant_id(
 async def get_tenant_id_or_redirect(
     api_key: str = Security(api_key_header),
     token: HTTPAuthorizationCredentials = Depends(bearer_scheme),
-    session: str = Cookie(None)
+    session: str = Cookie(None),
 ) -> str:
     try:
         return await get_tenant_id(api_key, token, session)
@@ -129,13 +141,16 @@ async def create_item(request: Request, uid: str = Depends(get_tenant_id)):
     items_ref = db.collection("user_data").document(uid).collection("items")
     doc_ref = items_ref.document()  # Auto-generates ID
 
-    doc_ref.set({
-        "item_name": item_name,
-        "id": doc_ref.id,
-        "owner_id": uid,
-        "created_at": firestore.SERVER_TIMESTAMP,
-        "updated_at": firestore.SERVER_TIMESTAMP
-    }, merge=True)
+    doc_ref.set(
+        {
+            "item_name": item_name,
+            "id": doc_ref.id,
+            "owner_id": uid,
+            "created_at": firestore.SERVER_TIMESTAMP,
+            "updated_at": firestore.SERVER_TIMESTAMP,
+        },
+        merge=True,
+    )
 
     logger.info(f"Created item {doc_ref.id} for user {uid}")
     return RedirectResponse(url="/dashboard", status_code=303)
@@ -182,14 +197,15 @@ async def update_or_create_item(
     if not isinstance(payload, dict):
         raise HTTPException(status_code=400, detail="Invalid JSON payload")
 
-
-    doc_ref = db.collection("user_data").document(uid).collection("items").document(
-        item_id
+    doc_ref = (
+        db.collection("user_data").document(uid).collection("items").document(item_id)
     )
 
     doc = doc_ref.get()
     if not doc.exists:
-        raise HTTPException(status_code=404, detail="Item ID does not exist. Create the item first.")
+        raise HTTPException(
+            status_code=404, detail="Item ID does not exist. Create the item first."
+        )
 
     data = {
         "id": item_id,
@@ -224,7 +240,9 @@ async def edit_item_form(request: Request, item_id: str):
         return RedirectResponse(url="/login")
 
     # Fetch the specific item
-    doc_ref = db.collection("user_data").document(uid).collection("items").document(item_id)
+    doc_ref = (
+        db.collection("user_data").document(uid).collection("items").document(item_id)
+    )
     doc = doc_ref.get()
 
     if not doc.exists:
@@ -232,15 +250,20 @@ async def edit_item_form(request: Request, item_id: str):
 
     item = doc.to_dict() | {"id": doc.id}
 
-    return templates.TemplateResponse("edit_item.html", {
-        "request": request,
-        "item": item,
-        "user": {"email": decoded_token.get("email", "Unknown User")}
-    })
+    return templates.TemplateResponse(
+        "edit_item.html",
+        {
+            "request": request,
+            "item": item,
+            "user": {"email": decoded_token.get("email", "Unknown User")},
+        },
+    )
 
 
 @app.post("/edit/{item_id}")
-async def update_item(request: Request, item_id: str, uid: str = Depends(get_tenant_id)):
+async def update_item(
+    request: Request, item_id: str, uid: str = Depends(get_tenant_id)
+):
     """
     Updates an existing item by ID
     """
@@ -254,7 +277,9 @@ async def update_item(request: Request, item_id: str, uid: str = Depends(get_ten
         raise HTTPException(status_code=400, detail="Item name is required")
 
     # Get the document reference
-    doc_ref = db.collection("user_data").document(uid).collection("items").document(item_id)
+    doc_ref = (
+        db.collection("user_data").document(uid).collection("items").document(item_id)
+    )
 
     # Verify item exists and belongs to user
     doc = doc_ref.get()
@@ -263,10 +288,9 @@ async def update_item(request: Request, item_id: str, uid: str = Depends(get_ten
 
     try:
         # Update the document by ID
-        doc_ref.update({
-            "item_name": item_name,
-            "updated_at": firestore.SERVER_TIMESTAMP
-        })
+        doc_ref.update(
+            {"item_name": item_name, "updated_at": firestore.SERVER_TIMESTAMP}
+        )
     except Exception:
         logger.exception("Failed to update item %s for user %s", item_id, uid)
         raise HTTPException(status_code=500, detail="Failed to update item")
@@ -281,7 +305,12 @@ async def delete_item(item_id: str, uid: str = Depends(get_tenant_id)):
     Deletes an item by ID by POSTing from the form
     """
     try:
-        doc_ref = db.collection("user_data").document(uid).collection("items").document(item_id)
+        doc_ref = (
+            db.collection("user_data")
+            .document(uid)
+            .collection("items")
+            .document(item_id)
+        )
         doc_ref.delete()
     except Exception:
         logger.exception("Failed to delete item %s for user %s", item_id, uid)
@@ -297,7 +326,12 @@ async def delete_item_api(item_id: str, uid: str = Depends(get_tenant_id)):
     Deletes an item by ID by DELETEing from the API
     """
     try:
-        doc_ref = db.collection("user_data").document(uid).collection("items").document(item_id)
+        doc_ref = (
+            db.collection("user_data")
+            .document(uid)
+            .collection("items")
+            .document(item_id)
+        )
 
         doc = doc_ref.get()
         if not doc.exists:
@@ -337,6 +371,7 @@ async def list_items(uid: str = Depends(get_tenant_id)):
 async def health():
     return {"status": "online"}
 
+
 @app.get("/debug-db")
 async def debug_db():
     # Attempt to list all keys in the collection
@@ -349,8 +384,9 @@ async def debug_db():
     return {
         "project_id": os.getenv("GOOGLE_CLOUD_PROJECT"),
         "emulator_host": os.getenv("FIRESTORE_EMULATOR_HOST"),
-        "keys_in_db": keys_found
+        "keys_in_db": keys_found,
     }
+
 
 @app.get("/dashboard", response_class=HTMLResponse)
 async def dashboard(request: Request):
@@ -374,19 +410,23 @@ async def dashboard(request: Request):
     items_ref = db.collection("user_data").document(uid).collection("items")
     items = [doc.to_dict() | {"id": doc.id} for doc in items_ref.stream()]
 
-    return templates.TemplateResponse("dashboard.html", {
-        "request": request,
-        "items": items,
-        "user": {"email": user_email}
-    })
+    return templates.TemplateResponse(
+        "dashboard.html",
+        {"request": request, "items": items, "user": {"email": user_email}},
+    )
+
 
 @app.get("/")
 async def root():
     return RedirectResponse(url="/dashboard")
 
+
 @app.get("/login")
 async def login(request: Request):
-    return templates.TemplateResponse("login.html", {"request": request,"firebase_config": firebase_config})
+    return templates.TemplateResponse(
+        "login.html", {"request": request, "firebase_config": firebase_config}
+    )
+
 
 @app.get("/debug-login")
 async def debug_login(uid: str = "default-user"):
@@ -399,6 +439,7 @@ async def debug_login(uid: str = "default-user"):
     response.set_cookie(key="session", value=uid)
     return response
 
+
 @app.get("/logout")
 async def logout():
     """
@@ -407,6 +448,7 @@ async def logout():
     response = RedirectResponse(url="/login")
     response.delete_cookie("session")
     return response
+
 
 @app.post("/auth/session")
 async def create_session(request: Request, session_data: SessionRequest):
@@ -428,7 +470,7 @@ async def create_session(request: Request, session_data: SessionRequest):
             httponly=True,
             secure=False,  # Set to True in production with HTTPS
             samesite="lax",
-            max_age=3600  # 1 hour
+            max_age=3600,  # 1 hour
         )
         return response
     except Exception as e:
