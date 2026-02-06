@@ -12,5 +12,5 @@ clean:
 	@/bin/rm -vf firebase-debug.log firestore-debug.log
 
 deploy:
-	firebase functions:secrets:access auth-allowed-emails --project $(PROJECT_ID)
-	firebase deploy --only hosting,functions --project $(PROJECT_ID)
+	#firebase functions:secrets:access auth-allowed-emails --project $(PROJECT_ID)
+	firebase deploy --only hosting --project $(PROJECT_ID)

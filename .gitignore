@@ -211,3 +211,4 @@ terraform.tfvars
 firebase-export*/
 .firebase/
 node_modules/
+backend.tfvars

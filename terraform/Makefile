@@ -4,10 +4,10 @@ plan:
 	terraform plan
 
 init:
-	terraform $(@) -backend-config="bucket=$(TERRAFORM_STATE_BUCKET)"
+	terraform $(@) -backend-config=backend.tfvars
 
 reconfigure upgrade:
-	terraform init -$(@) -backend-config="bucket=$(TERRAFORM_STATE_BUCKET)"
+	terraform init -$(@) -backend-config=backend.tfvars
 
 refresh validate fmt:
 	terraform $(@)

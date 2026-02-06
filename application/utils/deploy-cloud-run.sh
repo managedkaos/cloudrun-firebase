@@ -1,6 +1,8 @@
 #!/bin/bash
 
 # Configuration
+PROJECT_ID=${1} # TODO: Make a check for the project ID parameter and read the value from env if its not provided
+
 SERVICE_NAME="${SERVICE_NAME:-cloud-run-application}"
 REGION="${REGION:-us-central1}"
 SECRET_NAME="FIREBASE_CONFIG_JSON"
@@ -8,11 +10,15 @@ SECRET_NAME="FIREBASE_CONFIG_JSON"
 echo "🚀 Starting Fully Automated Deployment..."
 
 # 1. Get Project Info
+echo "$(date) Getting project info"
+gcloud config set project "${PROJECT_ID}"
 PROJECT_ID=$(gcloud config get-value project)
 PROJECT_NUMBER=$(gcloud projects describe $PROJECT_ID --format="value(projectNumber)")
+echo "$(date)\t   PROJECT_ID = ${PROJECT_ID}"
+echo "$(date)\tPROECT_NUMBER = ${PROJECT_NUMBER} "
 
 # 2. Fetch Firebase Config into memory
-echo "Fetching Firebase Web Config via CLI..."
+echo "$(date) Fetching Firebase Web Config via CLI..."
 # We use jq to extract just the configuration object from the CLI output
 FIREBASE_JSON=$(firebase --project=${PROJECT_ID} apps:sdkconfig WEB 2>/dev/null | sed -n '/^{/,/^}/p')
 

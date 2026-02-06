@@ -65,7 +65,6 @@ variable "cloud_run_name" {
 # terraform init -backend-config="bucket=${TERRAFORM_STATE_BUCKET}"
 terraform {
   backend "gcs" {
-    prefix = "terraform-v2/state"
   }
 
   required_providers {
@@ -116,17 +115,20 @@ resource "google_project_service" "services" {
     "billingbudgets.googleapis.com",     # Billing API
     "cloudbuild.googleapis.com",         # Cloud Build
     "cloudfunctions.googleapis.com",     # Cloud Functions
+    "eventarc.googleapis.com",           # Event Arc
     "firebase.googleapis.com",           # Firebase Management
     "firebaseextensions.googleapis.com", # Firebase Extensions
     "firebasehosting.googleapis.com",    # Firebase Hosting
     "firestore.googleapis.com",          # Firestore
     "identitytoolkit.googleapis.com",    # Firebase Auth
     "monitoring.googleapis.com",         # Monitoring API
+    "pubsub.googleapis.com",             # Pub Sub
     "run.googleapis.com",                # Cloud Run
     "secretmanager.googleapis.com",      # Secret Manager
     "servicecontrol.googleapis.com",     # Service Control
     "servicemanagement.googleapis.com",  # Service Management
     "serviceusage.googleapis.com",       # Service Usage
+    "storage.googleapis.com",            # Storage
   ])
 }
 
@@ -258,6 +260,19 @@ resource "google_project_iam_member" "firestore_user" {
   member  = "serviceAccount:${google_service_account.cloud_run_sa.email}"
 }
 
+# Create the Artifact Registry repository for Cloud Run
+resource "google_artifact_registry_repository" "cloud_run_source_deploy" {
+  provider      = google-beta.user_project_override_true
+  project       = google_project.default.project_id
+  location      = var.region
+  repository_id = "cloud-run-source-deploy"
+  description   = "Docker repository for Cloud Run source deployments"
+  format        = "DOCKER"
+
+  depends_on = [
+    google_project_service.services,
+  ]
+}
 
 # https://registry.terraform.io/providers/hashicorp/google/latest/docs/resources/cloud_run_v2_service
 resource "google_cloud_run_v2_service" "cloud_run" {
@@ -491,19 +506,7 @@ resource "google_cloudfunctions2_function" "blocking_functions" {
   ]
 }
 
-# Create the Artifact Registry repository
-resource "google_artifact_registry_repository" "cloud_run_source_deploy" {
-  provider      = google-beta.user_project_override_true
-  project       = google_project.default.project_id
-  location      = var.region
-  repository_id = "cloud-run-source-deploy"
-  description   = "Docker repository for Cloud Run source deployments"
-  format        = "DOCKER"
 
-  depends_on = [
-    google_project_service.services,
-  ]
-}
 
 # --- 9. Outputs ---
 output "project_id" {
@@ -523,4 +526,14 @@ output "cloud_run_url" {
 output "fastapi_docs" {
   value       = "${google_cloud_run_v2_service.cloud_run.uri}/docs"
   description = "The publicly accessible URL of the Cloud Run service"
+}
+
+output "project_console_url" {
+  value       = "https://console.firebase.google.com/project/${var.project_id}/overview"
+  description = "The Firebase Console project overview URL"
+}
+
+output "hosting_url" {
+  value       = "https://${var.project_id}.web.app"
+  description = "The Firebase Hosting default URL"
 }

@@ -78,7 +78,8 @@ clean:
 	@/bin/rm -vf firebase-debug.log firestore-debug.log
 
 deploy:
-	./utils/deploy-cloud-run.sh
+	# add check here to make sure project ID is set
+	./utils/deploy-cloud-run.sh $(PROJECT_ID)
 
 firebase-config:
 	firebase apps:sdkconfig web
