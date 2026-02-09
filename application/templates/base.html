@@ -13,7 +13,9 @@
 
 <body>
     <nav class="navbar">
-        <a href="/" class="nav-brand">Cloud Run & Firebase</a>
+        <a href="/" class="nav-brand">Cloud Run & Firebase:
+            <span class="nav-project-id">{{ project_id }}</span>
+        </a>
         <div class="nav-links">
             {% if request.cookies.get("session") %}
             <a href="/dashboard">Dashboard</a>

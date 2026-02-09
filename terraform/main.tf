@@ -411,6 +411,35 @@ resource "google_secret_manager_secret_version" "auth_allowed_emails_version" {
   }
 }
 
+# Create Secret for Allowed Emails
+resource "google_secret_manager_secret" "auth_allowed_emails_v2" {
+  provider   = google-beta
+  project    = var.project_id
+  secret_id  = "AUTH_ALLOWED_EMAILS"
+  depends_on = [google_project_service.services]
+
+  # change this to true to prevent accidental deletion
+  deletion_protection = false
+
+  replication {
+    auto {}
+  }
+}
+
+# Create Initial placeholder for Allowed Emails
+resource "google_secret_manager_secret_version" "auth_allowed_emails_version_v2" {
+  provider    = google-beta
+  secret      = google_secret_manager_secret.auth_allowed_emails_v2.id
+  secret_data = "test@example.com"
+
+  lifecycle {
+    ignore_changes = [
+      enabled,
+      secret_data
+    ]
+  }
+}
+
 # Service Account for the Function
 resource "google_service_account" "blocking_function_sa" {
   provider     = google-beta.user_project_override_true

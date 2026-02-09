@@ -53,6 +53,7 @@ app = FastAPI(title="Multi-Tenant CRUD API")
 app.mount("/static", StaticFiles(directory="static"), name="static")
 
 templates = Jinja2Templates(directory="templates")
+templates.env.globals["project_id"] = os.getenv("GOOGLE_CLOUD_PROJECT", "")
 
 firebase_config_raw = os.getenv("FIREBASE_CONFIG_JSON")
 

@@ -3,27 +3,26 @@ const { HttpsError } = require("firebase-functions/v2/https");
 
 // Helper function to keep it DRY (Don't Repeat Yourself)
 const validateEmail = (event) => {
-    // 0. Get the email address
+    // 0. Get the email address and make it lowercase
     const email = event.data?.email?.toLowerCase();
 
-    // 1. Access the secret from process.env (injected by Cloud Run/Firebase)
-    const rawAllowedEmails = process.env.AUTH_ALLOWED_EMAILS;
-
-    // 2. Check for the email
+    // 1. Check for the email and throw an error if the email is not present
     if (!email) {
         throw new HttpsError('invalid-argument', 'Email is required.');
     }
 
-    // 3. Check for the allowed emails; fatal error is not present
-    // because auth-allowed-emails secret is not mounted or empty
+    // 2. Access the secret "auth-allowed-emails"
+    const rawAllowedEmails = process.env.AUTH_ALLOWED_EMAILS;
+
+
+    // 3. Check for the allowed emails list; Throw a fatal error if the list is not present or empty
     if (!rawAllowedEmails) {
         throw new HttpsError('internal', 'Configuration error.');
     }
 
-    // 4. Parse and check (Consider caching the split array outside the handler if the list is huge)
+    // 4. If the email is not in the allowedEmails list, block it
     const allowedEmails = rawAllowedEmails.split(',').map(e => e.trim().toLowerCase());
 
-    // 5. If the email is not in the allowedEmails list, block it
     if (!allowedEmails.includes(email)) {
         console.warn(`${email} is unauthorized.  Access is denied.`);
         throw new HttpsError('permission-denied', 'The email is not on the authorized list.');
