@@ -1,5 +1,4 @@
-import logging
-import os
+import logging # TODO: Use firebase_functions.logger
 
 from firebase_functions import https_fn, identity_fn
 from firebase_functions.options import set_global_options
@@ -82,7 +81,7 @@ def _validate_email(event: identity_fn.AuthBlockingEvent) -> None:
         len(allowed_emails),
     )
 
-
+# Signup Trigger; Runs before the user is created
 @identity_fn.before_user_created(secrets=["AUTH_ALLOWED_EMAILS"])
 def before_create(event: identity_fn.AuthBlockingEvent) -> identity_fn.BeforeCreateResponse:
     logging.info("before_user_created start")
@@ -90,7 +89,8 @@ def before_create(event: identity_fn.AuthBlockingEvent) -> identity_fn.BeforeCre
     logging.info("before_user_created allow")
     return identity_fn.BeforeCreateResponse()
 
-
+# Login Trigger; Runs before any user logs in
+# Note that this function will also run when a user is created
 @identity_fn.before_user_signed_in(secrets=["AUTH_ALLOWED_EMAILS"])
 def before_sign_in(event: identity_fn.AuthBlockingEvent) -> identity_fn.BeforeSignInResponse:
     logging.info("before_user_signed_in start")

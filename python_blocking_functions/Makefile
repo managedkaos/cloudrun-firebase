@@ -2,4 +2,4 @@ deploy:
 	firebase deploy
 
 init:
-	firebase init functions --python
+	firebase init functions
