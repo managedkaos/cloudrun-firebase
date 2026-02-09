@@ -17,6 +17,3 @@ development-requirements.txt
 Makefile
 pyproject.toml
 Dockerfile
-
-
-
