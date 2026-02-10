@@ -180,3 +180,143 @@ resource "google_identity_platform_default_supported_idp_config" "google_sign_in
   ]
 }
 ```
+
+## Tagging
+
+Your Google Cloud organization or folder has a **Tag Engine policy** (or a similar organizational policy) that requires resources to be categorized. This is a common "best practice" in enterprise environments to ensure resources are not orphaned and costs are trackable.
+
+### 1. Benefits of Using Environment Tags
+
+Tagging doesn't just silence the warning; it unlocks several management features:
+
+- **Cost Allocation:** You can filter your billing reports by the `environment` tag to see exactly how much "Development" is costing versus "Production."
+
+- **Security & IAM:** You can write IAM policies that say _"Developers can only manage resources where environment=Development"_, preventing accidental deletions in Production.
+
+- **Automation:** You can run scripts that target specific tags (e.g., "Shut down all Cloud Run services tagged `environment:Test` every night at 8 PM to save money").
+
+- **Governance:** It provides a standardized way to audit your infrastructure without guessing based on service names.
+
+---
+
+### 2. How to "Fix" the Warning
+
+To satisfy the requirement, you need to bind a tag value to your **Project**. Run these commands in your terminal:
+
+**Step A: Find your Project Number**
+
+Bash
+
+```
+gcloud projects describe YOUR_PROJECT_ID --format="value(projectNumber)"
+```
+
+**Step B: Create the Tag Binding**
+
+The error message expects a specific key/value. Replace `VALUE` with `Development`, `Production`, etc.
+
+Bash
+
+```hcl
+# Note: You need the tag value's 'namespaced name' or 'permanent ID'.
+# Usually, it looks like: organizations/ORG_ID/tagKeys/environment/tagValues/Development
+
+gcloud resource-manager tags bindings create \
+    --tag-value=organizations/YOUR_ORG_ID/tagKeys/environment/tagValues/Development \
+    --parent=//cloudresourcemanager.googleapis.com/projects/YOUR_PROJECT_NUMBER
+```
+
+> **Tip:** If you don't know the exact IDs for your tags, you can usually add them through the **Google Cloud Console** by going to **IAM & Admin > Tags**.
+
+---
+
+### 3. Deploying Multiple Environments in One Project
+
+While Google generally recommends **one project per environment** (for total isolation), you can definitely manage multiple environments in one project using Cloud Run by following this pattern:
+
+#### The Strategy: Suffixing & Environment Variables
+
+Since a Cloud Run service name must be unique within a project, you differentiate them by name and use `--set-env-vars` to change their behavior.
+
+**1. Deploy the Development version:**
+
+Bash
+
+```bash
+gcloud run deploy my-app-dev \
+  --source . \
+  --set-env-vars="ENV=development,DB_URL=dev-db-url" \
+  --region us-central1
+```
+
+**2. Deploy the Production version (same code):**
+
+Bash
+
+```bash
+gcloud run deploy my-app-prod \
+  --source . \
+  --set-env-vars="ENV=production,DB_URL=prod-db-url" \
+  --region us-central1
+```
+
+#### Why do this?
+
+- **Separation:** `my-app-dev` and `my-app-prod` will have completely different URLs.
+
+- **Testing:** You can test new code on the `dev` URL without touching the `prod` traffic.
+
+- **Config:** Your code reads `process.env.DB_URL` (Node) or `os.environ.get('DB_URL')` (Python), so the code remains identical while the database it connects to changes.
+
+## Tagging in TF
+
+You need to grant your user or service account the **Tag Viewer** role on the Organization itself.
+
+If you plan to actually _create_ the binding (the link between your project and the tag), the **Tag Viewer** role is enough to "read" the keys, but you will also need the **Tag User** role to attach them to resources.
+
+- **Tag Viewer (`roles/resourcemanager.tagViewer`):** Allows Terraform to read/find the tag IDs.
+
+- **Tag User (`roles/resourcemanager.tagUser`):** Allows Terraform to "bind" that tag to your Project.
+
+```bash
+# 1. Grant permission to READ the tags
+gcloud organizations add-iam-policy-binding 663416857025 \
+    --member="user:USER_EMAIL" \
+    --role="roles/resourcemanager.tagViewer"
+
+# 2. Grant permission to USE/BIND the tags to resources
+gcloud organizations add-iam-policy-binding 663416857025 \
+    --member="user:USER_EMAIL" \
+    --role="roles/resourcemanager.tagUser"
+```
+
+```hcl
+# --- Variable for your environment name ---
+variable "environment_name" {
+  type        = string
+  description = "The human-readable environment name (e.g., Development, Production, Staging, Test)"
+}
+
+# 1. Lookup the Tag Key (the "environment" category)
+data "google_tags_tag_key" "env_key" {
+  parent     = "organizations/${var.organization_id}"
+  short_name = "environment"
+}
+
+# 2. Lookup the specific Tag Value based on your variable
+data "google_tags_tag_value" "env_value" {
+  parent     = data.google_tags_tag_key.env_key.id
+  short_name = var.environment_name
+}
+
+# Bind the environment tag to the project using the programmatically retrieved IDs
+resource "google_tags_tag_binding" "project_binding" {
+  # Uses the project number from your 'default' project resource
+  parent = "//cloudresourcemanager.googleapis.com/projects/${google_project.default.number}"
+
+  # Uses the permanent ID found by the data source above
+  tag_value = data.google_tags_tag_value.env_value.id
+
+  depends_on = [google_project.default]
+}
+```

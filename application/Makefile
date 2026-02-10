@@ -81,6 +81,9 @@ deploy:
 	# add check here to make sure project ID is set
 	./utils/deploy-cloud-run.sh $(PROJECT_ID)
 
+project-number:
+	gcloud projects describe $(GOOGLE_CLOUD_PROJECT) --format="value(projectNumber)"
+
 firebase-config:
 	firebase apps:sdkconfig web
 

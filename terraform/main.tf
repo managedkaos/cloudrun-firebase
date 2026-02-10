@@ -14,12 +14,17 @@ variable "region" {
   description = "The GCP region where resources are deployed"
 }
 
+variable "environment_name" {
+  type        = string
+  description = "The human-readable environment name (e.g., Development, Production, Staging, Test)"
+}
+
 variable "billing_account" {
   type        = string
   description = "The billing account ID.  Firebase project must use the Blaze plan and be associated with a Cloud Billing account.  See https://console.cloud.google.com/billing/"
 }
 
-variable "org_id" {
+variable "organization_id" {
   type        = string
   description = "The ID of the organization where resources will be created. You are not required to create an Organization resource to use Google Cloud. You can create, manage, and bill for projects as an individual user without an organization, but creating one is highly recommended for enterprise security, centralized control, and managing resources at scale. See https://console.cloud.google.com/organizations"
 }
@@ -92,7 +97,7 @@ resource "google_project" "default" {
   name            = var.project_name
   project_id      = var.project_id
   billing_account = var.billing_account
-  org_id          = var.org_id
+  org_id          = var.organization_id
 
   # Required for the project to display as a Firebase project.
   labels = {
@@ -204,6 +209,10 @@ resource "google_cloud_run_v2_service" "cloud_run" {
   location            = var.region
   deletion_protection = false
   depends_on          = [google_secret_manager_secret_iam_member.firebase_config_access]
+
+  labels = {
+    "environment" = lower(var.environment_name)
+  }
 
   template {
     service_account = google_service_account.cloud_run_sa.email
