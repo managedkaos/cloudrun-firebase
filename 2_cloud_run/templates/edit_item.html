@@ -7,7 +7,7 @@
     <h2>Edit Item</h2>
     <p class="mb-4 text-secondary">Logged in as: {{ user.email }}</p>
 
-    <form action="/edit/{{ item.id }}" method="post" class="flex-col">
+    <form action="{{ root_path }}/edit/{{ item.id }}" method="post" class="flex-col">
         <div class="form-group">
             <label for="name">Item Name</label>
             <input type="text" name="name" id="name" value="{{ item.item_name }}" required>
@@ -16,7 +16,7 @@
             <button type="submit" class="btn" style="padding: 0.5rem 1rem; font-size: 0.8rem; width: auto;">
                 Save Changes
             </button>
-            <a href="/dashboard" class="btn btn-secondary text-center"
+            <a href="{{ root_path }}/dashboard" class="btn btn-secondary text-center"
                 style="display: inline-block; padding: 0.5rem 1rem; font-size: 0.8rem; width: auto; text-decoration: none;">Cancel</a>
         </div>
     </form>

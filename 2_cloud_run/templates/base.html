@@ -8,21 +8,21 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="/static/css/style.css">
+    <link rel="stylesheet" href="{{ root_path }}/static/css/style.css">
 </head>
 
 <body>
     <nav class="navbar">
-        <a href="/" class="nav-brand">Cloud Run & Firebase:
+        <a href="{{ root_path }}/" class="nav-brand">Cloud Run & Firebase:
             <span class="nav-project-id">{{ project_id }}</span>
         </a>
         <div class="nav-links">
             {% if request.cookies.get("session") %}
-            <a href="/dashboard">Dashboard</a>
-            <a href="/docs" target="_blank">Docs</a>
-            <a href="/logout">Logout</a>
+            <a href="{{ root_path }}/dashboard">Dashboard</a>
+            <a href="{{ root_path }}/docs" target="_blank">Docs</a>
+            <a href="{{ root_path }}/logout">Logout</a>
             {% else %}
-            <a href="/login">Login</a>
+            <a href="{{ root_path }}/login">Login</a>
             {% endif %}
         </div>
     </nav>

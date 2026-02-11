@@ -15,6 +15,7 @@ from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
 from fastapi.security import APIKeyHeader, HTTPAuthorizationCredentials, HTTPBearer
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
+from starlette.datastructures import URL
 
 # from firebase_admin import auth, credentials, firestore, initialize_app
 from firebase_admin import auth, firestore, initialize_app
@@ -46,7 +47,7 @@ else:
 
 db = firestore.client()
 
-app = FastAPI(title="Multi-Tenant CRUD API")
+app = FastAPI(title="Multi-Tenant CRUD API", root_path="/app")
 
 
 # Mount Static and Templates
@@ -54,6 +55,7 @@ app.mount("/static", StaticFiles(directory="static"), name="static")
 
 templates = Jinja2Templates(directory="templates")
 templates.env.globals["project_id"] = os.getenv("GOOGLE_CLOUD_PROJECT", "")
+templates.env.globals["root_path"] = "/app"
 
 firebase_config_raw = os.getenv("FIREBASE_CONFIG_JSON")
 
@@ -126,7 +128,15 @@ async def get_tenant_id_or_redirect(
 
 
 # 4. CRUD Routes
-@app.post("/item/create")
+def redirect_to(
+    request: Request, route_name: str, status_code: int = 307, **params
+) -> RedirectResponse:
+    url = request.url_for(route_name, **params)
+    # Keep redirects relative so the browser stays on the proxy host (Firebase)
+    return RedirectResponse(url=URL(url).path, status_code=status_code)
+
+
+@app.post("/item/create", name="create_item")
 async def create_item(request: Request, uid: str = Depends(get_tenant_id)):
     """
     Creates a new item with an auto-generated ID
@@ -156,7 +166,7 @@ async def create_item(request: Request, uid: str = Depends(get_tenant_id)):
     )
 
     logger.info(f"Created item {doc_ref.id} for user {uid}")
-    return RedirectResponse(url="/dashboard", status_code=303)
+    return redirect_to(request, "dashboard", status_code=303)
 
 
 @app.post("/item")
@@ -224,7 +234,7 @@ async def update_or_create_item(
     return {"id": item_id, "message": "Item updated/created"}
 
 
-@app.get("/edit/{item_id}", response_class=HTMLResponse)
+@app.get("/edit/{item_id}", name="edit_item_form", response_class=HTMLResponse)
 async def edit_item_form(request: Request, item_id: str):
     """
     Display the edit form for an item
@@ -233,14 +243,14 @@ async def edit_item_form(request: Request, item_id: str):
     session = request.cookies.get("session")
 
     if not session:
-        return RedirectResponse(url="/login")
+        return redirect_to(request, "login")
 
     try:
         decoded_token = auth.verify_id_token(session)
         uid = decoded_token["uid"]
     except Exception as e:
         logger.warning(f"Session verification failed: {e}")
-        return RedirectResponse(url="/login")
+        return redirect_to(request, "login")
 
     # Fetch the specific item
     doc_ref = (
@@ -263,7 +273,7 @@ async def edit_item_form(request: Request, item_id: str):
     )
 
 
-@app.post("/edit/{item_id}")
+@app.post("/edit/{item_id}", name="update_item")
 async def update_item(
     request: Request, item_id: str, uid: str = Depends(get_tenant_id)
 ):
@@ -299,11 +309,13 @@ async def update_item(
         raise HTTPException(status_code=500, detail="Failed to update item")
 
     logger.info(f"Updated item {item_id} for user {uid}")
-    return RedirectResponse(url="/dashboard", status_code=303)
+    return redirect_to(request, "dashboard", status_code=303)
 
 
-@app.post("/delete/{item_id}")
-async def delete_item(item_id: str, uid: str = Depends(get_tenant_id)):
+@app.post("/delete/{item_id}", name="delete_item")
+async def delete_item(
+    request: Request, item_id: str, uid: str = Depends(get_tenant_id)
+):
     """
     Deletes an item by ID by POSTing from the form
     """
@@ -320,7 +332,7 @@ async def delete_item(item_id: str, uid: str = Depends(get_tenant_id)):
         raise HTTPException(status_code=500, detail="Failed to delete item")
 
     logger.info(f"Deleted item {item_id} for user {uid}")
-    return RedirectResponse(url="/dashboard", status_code=303)
+    return redirect_to(request, "dashboard", status_code=303)
 
 
 @app.delete("/item/{item_id}")
@@ -375,6 +387,16 @@ async def health():
     return {"status": "online"}
 
 
+@app.get("/debug-headers")
+async def debug_headers(request: Request):
+    return {
+        "host": request.headers.get("host"),
+        "x_forwarded_host": request.headers.get("x-forwarded-host"),
+        "x_forwarded_proto": request.headers.get("x-forwarded-proto"),
+        "url_for_login": str(request.url_for("login")),
+    }
+
+
 @app.get("/debug-db")
 async def debug_db():
     # Attempt to list all keys in the collection
@@ -391,14 +413,14 @@ async def debug_db():
     }
 
 
-@app.get("/dashboard", response_class=HTMLResponse)
+@app.get("/dashboard", name="dashboard", response_class=HTMLResponse)
 async def dashboard(request: Request):
     # Get session cookie manually for HTML pages
     session = request.cookies.get("session")
 
     # Handle authentication with redirect
     if not session:
-        return RedirectResponse(url="/login")
+        return redirect_to(request, "login")
 
     try:
         # Verify the session token
@@ -407,7 +429,7 @@ async def dashboard(request: Request):
         user_email = decoded_token.get("email", "Unknown User")
     except Exception as e:
         logger.warning(f"Session verification failed: {e}")
-        return RedirectResponse(url="/login")
+        return redirect_to(request, "login")
 
     # Fetch data using the uid
     items_ref = db.collection("user_data").document(uid).collection("items")
@@ -419,36 +441,36 @@ async def dashboard(request: Request):
     )
 
 
-@app.get("/")
-async def root():
-    return RedirectResponse(url="/dashboard")
+@app.get("/", name="root")
+async def root(request: Request):
+    return redirect_to(request, "dashboard")
 
 
-@app.get("/login")
+@app.get("/login", name="login")
 async def login(request: Request):
     return templates.TemplateResponse(
         "login.html", {"request": request, "firebase_config": firebase_config}
     )
 
 
-@app.get("/debug-login")
-async def debug_login(uid: str = "default-user"):
+@app.get("/debug-login", name="debug_login")
+async def debug_login(request: Request, uid: str = "default-user"):
     """
     Simulates a login by setting the 'session' cookie.
     Access via: http://localhost:8080/debug-login?uid=your_test_uid
     """
-    response = RedirectResponse(url="/dashboard")
+    response = redirect_to(request, "dashboard")
     # In production, use httponly=True and secure=True
     response.set_cookie(key="session", value=uid)
     return response
 
 
-@app.get("/logout")
-async def logout():
+@app.get("/logout", name="logout")
+async def logout(request: Request):
     """
     Clears the cookie and redirects home.
     """
-    response = RedirectResponse(url="/login")
+    response = redirect_to(request, "login")
     response.delete_cookie("session")
     return response
 

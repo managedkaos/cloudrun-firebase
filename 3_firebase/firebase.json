@@ -66,16 +66,16 @@
     ],
     "rewrites": [
       {
+        "source": "/app/**",
+        "run": {
+          "serviceId": "cloud-run-application",
+          "region": "us-central1"
+        }
+      },
+      {
         "source": "**",
         "destination": "/index.html"
       }
     ]
-  },
-  "functions": [
-    {
-      "source": "auth_functions",
-      "codebase": "default",
-      "runtime": "nodejs24"
-    }
-  ]
+  }
 }

@@ -54,14 +54,14 @@
             const idToken = await user.getIdToken();
 
             // Send token to FastAPI to set a secure HTTP-only cookie
-            const response = await fetch('/auth/session', {
+            const response = await fetch('{{ root_path }}/auth/session', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ token: idToken })
             });
 
             if (response.ok) {
-                window.location.href = '/dashboard';
+                window.location.href = '{{ root_path }}/dashboard';
             } else {
                 const errorData = await response.json();
                 alert('Failed to create session: ' + (errorData.detail || 'Unknown error'));

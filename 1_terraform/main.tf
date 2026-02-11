@@ -1,3 +1,4 @@
+# TODO: Add validation to the inputs to keep input checking robust
 # --- 0. Variables ---
 variable "project_name" {
   type        = string

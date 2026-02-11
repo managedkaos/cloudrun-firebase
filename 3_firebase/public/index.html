@@ -68,7 +68,9 @@
                 <!-- TODO: Remove the localhost URL before deploying -->
                 <!-- TODO: Remove the hardcoded URL before creating a template repo -->
                 <!-- TODO: Replace '#' with your Cloud Run Service URL -->
-                <a href="http://localhost:8080/dashboard">Launch Application &rarr;</a>
+                <div class="cta-row animate-up delay-200">
+                    <a href="#" id="launch-app">Launch Application &rarr;</a>
+                </div>
             </div>
         </div>
     </section>
@@ -79,6 +81,15 @@
                     href="https://github.com/managedkaos">managedkaos</a></p>
         </div>
     </footer>
+    <script>
+        // Set the correct URL based on environment
+        const API_BASE = window.location.hostname === 'localhost'
+            ? 'http://localhost:8080'
+            : '/app';
+
+        // Update the link
+        document.getElementById('launch-app').href = `${API_BASE}/dashboard`;
+    </script>
 </body>
 
 </html>
